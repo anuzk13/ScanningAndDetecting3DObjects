@@ -6,6 +6,7 @@ A custom pan gesture reconizer that fires only when a threshold is passed.
 */
 
 import UIKit.UIGestureRecognizerSubclass
+import ARKit
 
 class ThresholdPanGestureRecognizer: UIPanGestureRecognizer {
     
@@ -17,6 +18,9 @@ class ThresholdPanGestureRecognizer: UIPanGestureRecognizer {
     
     /// The initial touch location when this gesture started.
     private var initialLocation: CGPoint = .zero
+    
+    /// The offset in screen space to the manipulated object
+    private var offsetToObject: CGPoint = .zero
     
     /// Observe when the gesture's `state` changes to reset the threshold.
     override var state: UIGestureRecognizer.State {
@@ -36,6 +40,12 @@ class ThresholdPanGestureRecognizer: UIPanGestureRecognizer {
         super.touchesBegan(touches, with: event)
         
         initialLocation = location(in: view)
+        
+        if let viewController = ViewController.instance, let object = viewController.scan?.objectToManipulate {
+            let objectPos = viewController.sceneView.projectPoint(object.worldPosition)
+            offsetToObject.x = CGFloat(objectPos.x) - initialLocation.x
+            offsetToObject.y = CGFloat(objectPos.y) - initialLocation.y
+        }
     }
     
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
@@ -60,5 +70,9 @@ class ThresholdPanGestureRecognizer: UIPanGestureRecognizer {
         default:
             return super.location(in: view)
         }
+    }
+    
+    func offsetLocation(in view: UIView?) -> CGPoint {
+        return location(in: view) + offsetToObject
     }
 }

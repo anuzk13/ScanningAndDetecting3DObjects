@@ -53,6 +53,10 @@ class BoundingBoxSide: SCNNode {
     // Maximum number of tiles per row/column
     private var maxTileCount: Int = 4
     
+    private var lineThickness: CGFloat = 0.002
+    
+    private var extensionLength: Float = 0.05
+    
     private(set) var isBusyUpdatingTiles: Bool = false
     
     // The size of the bounding box side when the tiles were updated the last time.
@@ -159,37 +163,35 @@ class BoundingBoxSide: SCNNode {
     
     func setupTiles() {
         isBusyUpdatingTiles = true
-        ViewController.serialQueue.async {
         
-            // Determine number of rows and colums
-            let numRows = min(self.maxTileCount, Int(ceil(self.size.height / self.maxTileSize)))
-            let numColumns = min(self.maxTileCount, Int(ceil(self.size.width / self.maxTileSize)))
-            
-            var newTiles = [Tile]()
-            
-            // Create updated tiles and lay them out
-            for row in 0..<numRows {
-                for col in 0..<numColumns {
-                    let plane = SCNPlane(width: self.size.width / CGFloat(numColumns), height: self.size.height / CGFloat(numRows))
-                    plane.materials = [SCNMaterial.material(withDiffuse: self.color, isDoubleSided: false)]
+        // Determine number of rows and colums
+        let numRows = min(self.maxTileCount, Int(ceil(self.size.height / self.maxTileSize)))
+        let numColumns = min(self.maxTileCount, Int(ceil(self.size.width / self.maxTileSize)))
+        
+        var newTiles = [Tile]()
+        
+        // Create updated tiles and lay them out
+        for row in 0..<numRows {
+            for col in 0..<numColumns {
+                let plane = SCNPlane(width: self.size.width / CGFloat(numColumns), height: self.size.height / CGFloat(numRows))
+                plane.materials = [SCNMaterial.material(withDiffuse: self.color, isDoubleSided: false)]
 
-                    let xPos = -self.size.width / 2 + plane.width / 2 + CGFloat(col) * plane.width
-                    let yPos = self.size.height / 2 - plane.height / 2 - CGFloat(row) * plane.height
-                    
-                    let tileNode = Tile(plane)
-                    tileNode.simdPosition = float3(Float(xPos), Float(yPos), 0)
-                    newTiles.append(tileNode)
-                }
+                let xPos = -self.size.width / 2 + plane.width / 2 + CGFloat(col) * plane.width
+                let yPos = self.size.height / 2 - plane.height / 2 - CGFloat(row) * plane.height
+                
+                let tileNode = Tile(plane)
+                tileNode.simdPosition = float3(Float(xPos), Float(yPos), 0)
+                newTiles.append(tileNode)
             }
-            
-            // Replace the nodes in the scene graph.
-            self.tiles.forEach { $0.removeFromParentNode() }
-            newTiles.forEach { self.addChildNode($0) }
-            self.tiles = newTiles
-
-            self.sizeOnLastTileUpdate = self.size
-            self.isBusyUpdatingTiles = false
         }
+        
+        // Replace the nodes in the scene graph.
+        self.tiles.forEach { $0.removeFromParentNode() }
+        newTiles.forEach { self.addChildNode($0) }
+        self.tiles = newTiles
+
+        self.sizeOnLastTileUpdate = self.size
+        self.isBusyUpdatingTiles = false
     }
     
     // MARK: - Line-based dragging visualization
@@ -197,13 +199,19 @@ class BoundingBoxSide: SCNNode {
     func setupExtensions() {
         for index in 0...11 {
             let line = SCNNode()
-            line.geometry = cylinder(width: 0.002, height: 0.1)
+            line.geometry = cylinder(width: lineThickness, height: extensionLength)
             if index < 4 {
                 xAxisExtLines.append(line)
                 line.simdLocalRotate(by: simd_quatf(angle: -.pi / 2, axis: .z))
+                if index == 2 || index == 3 {
+                    line.simdLocalRotate(by: simd_quatf(angle: .pi, axis: .x))
+                }
                 xAxisExtNode.addChildNode(line)
             } else if index < 8 {
                 yAxisExtLines.append(line)
+                if index == 5 || index == 7 {
+                    line.simdLocalRotate(by: simd_quatf(angle: .pi, axis: .x))
+                }
                 yAxisExtNode.addChildNode(line)
             } else {
                 zAxisExtLines.append(line)
@@ -225,18 +233,22 @@ class BoundingBoxSide: SCNNode {
     func updateExtensions() {
         guard xAxisExtLines.count == 4, yAxisExtLines.count == 4, zAxisExtLines.count == 4 else { return }
         
-        xAxisExtLines[0].simdPosition = float3(-Float(size.width) / 2, -Float(size.height) / 2, 0)
-        yAxisExtLines[0].simdPosition = float3(-Float(size.width) / 2, -Float(size.height) / 2, 0)
-        zAxisExtLines[0].simdPosition = float3(-Float(size.width) / 2, -Float(size.height) / 2, 0)
-        xAxisExtLines[1].simdPosition = float3(-Float(size.width) / 2, Float(size.height) / 2, 0)
-        yAxisExtLines[1].simdPosition = float3(-Float(size.width) / 2, Float(size.height) / 2, 0)
-        zAxisExtLines[1].simdPosition = float3(-Float(size.width) / 2, Float(size.height) / 2, 0)
-        xAxisExtLines[2].simdPosition = float3(Float(size.width) / 2, -Float(size.height) / 2, 0)
-        yAxisExtLines[2].simdPosition = float3(Float(size.width) / 2, -Float(size.height) / 2, 0)
-        zAxisExtLines[2].simdPosition = float3(Float(size.width) / 2, -Float(size.height) / 2, 0)
-        xAxisExtLines[3].simdPosition = float3(Float(size.width) / 2, Float(size.height) / 2, 0)
-        yAxisExtLines[3].simdPosition = float3(Float(size.width) / 2, Float(size.height) / 2, 0)
-        zAxisExtLines[3].simdPosition = float3(Float(size.width) / 2, Float(size.height) / 2, 0)
+        let halfWidth = Float(size.width) / 2
+        let halfHeight = Float(size.height) / 2
+        let halfLength = (extensionLength / 2)
+        
+        xAxisExtLines[0].simdPosition = float3(-halfWidth - halfLength, -halfHeight, 0)
+        yAxisExtLines[0].simdPosition = float3(-halfWidth, -halfHeight - halfLength, 0)
+        zAxisExtLines[0].simdPosition = float3(-halfWidth, -halfHeight, halfLength)
+        xAxisExtLines[1].simdPosition = float3(-halfWidth - halfLength, halfHeight, 0)
+        yAxisExtLines[1].simdPosition = float3(-halfWidth, halfHeight + halfLength, 0)
+        zAxisExtLines[1].simdPosition = float3(-halfWidth, halfHeight, halfLength)
+        xAxisExtLines[2].simdPosition = float3(halfWidth + halfLength, -halfHeight, 0)
+        yAxisExtLines[2].simdPosition = float3(halfWidth, -halfHeight - halfLength, 0)
+        zAxisExtLines[2].simdPosition = float3(halfWidth, -halfHeight, halfLength)
+        xAxisExtLines[3].simdPosition = float3(halfWidth + halfLength, halfHeight, 0)
+        yAxisExtLines[3].simdPosition = float3(halfWidth, halfHeight + halfLength, 0)
+        zAxisExtLines[3].simdPosition = float3(halfWidth, halfHeight, halfLength)
     }
     
     func showXAxisExtensions() {

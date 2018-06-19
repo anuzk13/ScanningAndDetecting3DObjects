@@ -11,14 +11,13 @@ import ARKit
 
 class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UIDocumentPickerDelegate {
     
-    static let serialQueue = DispatchQueue(label: Bundle.main.bundleIdentifier! + ".serialSceneKitQueue")
-    
     static let appStateChangedNotification = Notification.Name("ApplicationStateChanged")
     static let appStateUserInfoKey = "AppState"
     
     static var instance: ViewController?
     
     @IBOutlet weak var sceneView: ARSCNView!
+    @IBOutlet weak var blurView: UIVisualEffectView!
     @IBOutlet weak var nextButton: RoundedButton!
     var backButton: UIBarButtonItem!
     @IBOutlet weak var instructionView: UIVisualEffectView!
@@ -39,7 +38,10 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
     internal var testRun: TestRun?
     
     internal var messageExpirationTimer: Timer?
-    internal var timeOfLastSessionStatusChange: TimeInterval?
+    internal var startTimeOfLastMessage: TimeInterval?
+    internal var expirationTimeOfLastMessage: TimeInterval?
+    
+    internal var screenCenter = CGPoint()
     
     var modelURL: URL? {
         didSet {
@@ -86,12 +88,30 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
                                        name: ScannedObject.boundingBoxCreatedNotification, object: nil)
         notificationCenter.addObserver(self, selector: #selector(scanPercentageChanged),
                                        name: BoundingBox.scanPercentageChangedNotification, object: nil)
+        notificationCenter.addObserver(self, selector: #selector(boundingBoxExtentChanged(_:)),
+                                       name: BoundingBox.extentChangedNotification, object: nil)
+        notificationCenter.addObserver(self, selector: #selector(boundingBoxPositionChanged(_:)),
+                                       name: BoundingBox.positionChangedNotification, object: nil)
+        notificationCenter.addObserver(self, selector: #selector(objectOriginPositionChanged(_:)),
+                                       name: ObjectOrigin.positionChangedNotification, object: nil)
+        notificationCenter.addObserver(self, selector: #selector(displayWarningIfInLowPowerMode),
+                                       name: Notification.Name.NSProcessInfoPowerStateDidChange, object: nil)
         
         setupNavigationBar()
+        
+        displayWarningIfInLowPowerMode()
         
         // Make sure the application launches in .startARSession state.
         // Entering this state will run() the ARSession.
         state = .startARSession
+    }
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        
+        // Store the screen center location after the view's bounds did change,
+        // so it can be retrieved later from outside the main thread.
+        screenCenter = sceneView.center
     }
     
     // MARK: - UI Event Handling
@@ -130,10 +150,13 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
     }
     
     @IBAction func nextButtonTapped(_ sender: Any) {
+        guard !nextButton.isHidden && nextButton.isEnabled else { return }
         switchToNextState()
     }
     
     @IBAction func loadModelButtonTapped(_ sender: Any) {
+        guard !loadModelButton.isHidden && loadModelButton.isEnabled else { return }
+        
         let documentPicker = UIDocumentPickerViewController(documentTypes: ["com.pixar.universal-scene-description-mobile"], in: .import)
         documentPicker.delegate = self
         
@@ -146,23 +169,39 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
         }
     }
     
+    @IBAction func leftButtonTouchAreaTapped(_ sender: Any) {
+        // A tap in the extended hit area on the lower left should cause a tap
+        //  on the button that is currently visible at that location.
+        if !loadModelButton.isHidden {
+            loadModelButtonTapped(self)
+        } else if !flashlightButton.isHidden {
+            toggleFlashlightButtonTapped(self)
+        }
+    }
+    
     @IBAction func toggleFlashlightButtonTapped(_ sender: Any) {
+        guard !flashlightButton.isHidden && flashlightButton.isEnabled else { return }
         flashlightButton.toggledOn = !flashlightButton.toggledOn
     }
     
     @IBAction func toggleInstructionsButtonTapped(_ sender: Any) {
-        if toggleInstructionsButton.toggledOn {
-            instructionView.isHidden = true
-            toggleInstructionsButton.toggledOn = false
-        } else {
-            instructionView.isHidden = false
-            toggleInstructionsButton.toggledOn = true
-        }
+        guard !toggleInstructionsButton.isHidden && toggleInstructionsButton.isEnabled else { return }
+        
+        toggleInstructionsButton.toggledOn ? hideInstructions() : showInstructions()
     }
     
     func displayInstruction(_ message: Message) {
-        instructionView.isHidden = false
         instructionLabel.display(message)
+        showInstructions()
+    }
+    
+    func hideInstructions() {
+        instructionView.isHidden = true
+        toggleInstructionsButton.toggledOn = false
+    }
+    
+    func showInstructions() {
+        instructionView.isHidden = false
         toggleInstructionsButton.toggledOn = true
     }
     
@@ -338,7 +377,8 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
         }
     }
     
-    func session(_ session: ARSession, didUpdate frame: ARFrame) {
+    func renderer(_ renderer: SCNSceneRenderer, updateAtTime time: TimeInterval) {
+        guard let frame = sceneView.session.currentFrame else { return }
         scan?.updateOnEveryFrame(frame)
         testRun?.updateOnEveryFrame()
     }
@@ -375,6 +415,46 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
         }
         DispatchQueue.main.async {
             self.setNavigationBarTitle("Scan (\(percentage)%)")
+        }
+    }
+    
+    @objc
+    func boundingBoxExtentChanged(_ notification: Notification) {
+        guard let extent = notification.userInfo?[BoundingBox.boxExtentUserInfoKey] as? float3 else { return }
+        
+        let xString = String(format: "x: %.2f", extent.x)
+        let yString = String(format: "y: %.2f", extent.y)
+        let zString = String(format: "z: %.2f", extent.z)
+        displayMessage("Current bounding box size in meters:\n\(xString) \(yString) \(zString)", expirationTime: 1.5)
+    }
+    
+    @objc
+    func boundingBoxPositionChanged(_ notification: Notification) {
+        guard let node = notification.object as? BoundingBox,
+            let cameraPos = sceneView.pointOfView?.simdWorldPosition else { return }
+        
+        let distanceFromCamera = String(format: "%.2f", distance(node.simdWorldPosition, cameraPos))
+        displayMessage("Current bounding box distance: \(distanceFromCamera) m", expirationTime: 1.5)
+    }
+    
+    @objc
+    func objectOriginPositionChanged(_ notification: Notification) {
+        guard let node = notification.object as? ObjectOrigin else { return }
+        
+        // Display origin position w.r.t. bounding box
+        let xString = String(format: "x: %.2f", node.position.x)
+        let yString = String(format: "y: %.2f", node.position.y)
+        let zString = String(format: "z: %.2f", node.position.z)
+        displayMessage("Current local origin position in meters:\n\(xString) \(yString) \(zString)", expirationTime: 1.5)
+    }
+    
+    @objc
+    func displayWarningIfInLowPowerMode() {
+        if ProcessInfo.processInfo.isLowPowerModeEnabled {
+            let title = "Low Power Mode is enabled"
+            let message = "Performance may be impacted. For best scanning results, disable Low Power Mode in Settings > Battery, and restart the scan."
+            let buttonTitle = "OK"
+            self.showAlert(title: title, message: message, buttonTitle: buttonTitle, showCancel: false)
         }
     }
 }

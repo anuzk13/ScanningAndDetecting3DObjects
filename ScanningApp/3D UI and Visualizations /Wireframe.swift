@@ -155,9 +155,7 @@ class Wireframe: SCNNode {
         
         flashTimer?.invalidate()
         flashTimer = Timer.scheduledTimer(withTimeInterval: flashDuration, repeats: false) { _ in
-            DispatchQueue.main.async {
-                self.isHighlighted = false
-            }
+            self.isHighlighted = false
         }
     }
 }

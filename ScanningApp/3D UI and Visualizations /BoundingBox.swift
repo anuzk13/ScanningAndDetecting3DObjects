@@ -14,20 +14,24 @@ class BoundingBox: SCNNode {
     static let positionChangedNotification = Notification.Name("BoundingBoxPositionChanged")
     static let scanPercentageChangedNotification = Notification.Name("ScanPercentageChanged")
     static let scanPercentageUserInfoKey = "ScanPercentage"
+    static let boxExtentUserInfoKey = "BoxExtent"
     
     var extent: float3 = float3(0.1, 0.1, 0.1) {
         didSet {
             extent = max(extent, minSize)
             updateVisualization()
             NotificationCenter.default.post(name: BoundingBox.extentChangedNotification,
-                                            object: self)
+                                            object: self,
+                                            userInfo: [BoundingBox.boxExtentUserInfoKey: extent])
         }
     }
     
     override var simdPosition: float3 {
-        didSet {
-            NotificationCenter.default.post(name: BoundingBox.positionChangedNotification,
-                                            object: self)
+        willSet(newValue) {
+            if distance(newValue, simdPosition) > 0.001 {
+                NotificationCenter.default.post(name: BoundingBox.positionChangedNotification,
+                                                object: self)
+            }
         }
     }
     
@@ -45,8 +49,8 @@ class BoundingBox: SCNNode {
     
     private var currentSideDrag: SideDrag?
     
-    private var currentAxisDrag: PlaneDrag?
-    private var currentPlaneDrag: PlaneDrag?
+    private var currentSidePlaneDrag: PlaneDrag?
+    private var currentGroundPlaneDrag: PlaneDrag?
     
     private var wireframe: Wireframe?
     
@@ -62,6 +66,8 @@ class BoundingBox: SCNNode {
     private var isUpdatingCapturingProgress = false
     
     private var sceneView: ARSCNView
+    
+    internal var isSnappedToHorizontalPlane = false
     
     init(_ sceneView: ARSCNView) {
         self.sceneView = sceneView
@@ -133,14 +139,11 @@ class BoundingBox: SCNNode {
     }
     
     private func updateVisualization() {
-        ViewController.serialQueue.async {
-            self.updateSides()
-            self.updateWireframe()
-        }
+        self.updateSides()
+        self.updateWireframe()
     }
     
     private func updateWireframe() {
-        // Note: No serialQueue.async in here because this method is called only from updateVisualization()
         // When this method is called the first time, create the wireframe and add them as child node.
         guard let wireframe = self.wireframe else {
             let wireframe = Wireframe(extent: self.extent, color: color)
@@ -154,7 +157,6 @@ class BoundingBox: SCNNode {
     }
     
     private func updateSides() {
-        // Note: No serialQueue.async in here because this method is called only from updateVisualization()
         // When this method is called the first time, create the sides and add them to the sidesNode.
         guard sides.count == 6 else {
             createSides()
@@ -227,7 +229,7 @@ class BoundingBox: SCNNode {
         currentSideDrag = nil
     }
     
-    func startAxisOrPlaneDrag(screenPos: CGPoint) {
+    func startSidePlaneDrag(screenPos: CGPoint) {
         guard let camera = sceneView.pointOfView else { return }
 
         let hitResults = sceneView.hitTest(screenPos, options: [
@@ -236,55 +238,41 @@ class BoundingBox: SCNNode {
         
         for result in hitResults {
             if let side = result.node.parent as? BoundingBoxSide {
-                for side in sidesForAxis(side.dragAxis) {
-                    side?.showZAxisExtensions()
-                }
+                side.showXAxisExtensions()
+                side.showYAxisExtensions()
                 
                 let sideNormalInWorld = normalize(self.simdConvertVector(side.dragAxis.normal, to: nil) -
                     self.simdConvertVector(float3(0), to: nil))
                 
-                let dragRay = Ray(origin: float3(result.worldCoordinates), direction: sideNormalInWorld)
-                let transform = dragPlaneTransform(for: dragRay, cameraPos: camera.simdWorldPosition)
+                let planeNormalRay = Ray(origin: float3(result.worldCoordinates), direction: sideNormalInWorld)
+                let transform = dragPlaneTransform(forPlaneNormal: planeNormalRay, camera: camera)
                 
                 var offset = float3()
-                if let hitPos = sceneView.unprojectPointLocal(screenPos, ontoPlane: transform) {
-                    // Project the result onto the plane's X axis & transform into world coordinates.
-                    let posOnPlaneXAxis = float4(hitPos.x, 0, 0, 1)
-                    let worldPosOnPlaneXAxis = transform * posOnPlaneXAxis
-                    offset = self.simdWorldPosition - worldPosOnPlaneXAxis.xyz
+                if let hitPos = sceneView.unprojectPoint(screenPos, ontoPlane: transform) {
+                    offset = self.simdWorldPosition - hitPos
                 }
                 
-                currentAxisDrag = PlaneDrag(planeTransform: transform, offset: offset)
+                currentSidePlaneDrag = PlaneDrag(planeTransform: transform, offset: offset)
                 hasBeenAdjustedByUser = true
                 return
             }
         }
+    }
+    
+    func updateSidePlaneDrag(screenPos: CGPoint) {
+        guard let drag = currentSidePlaneDrag else { return }
+        if let hitPos = sceneView.unprojectPoint(screenPos, ontoPlane: drag.planeTransform) {
+            self.simdWorldPosition = hitPos + drag.offset
+            
+            snapToHorizontalPlane()
+        }
+    }
+    
+    func endSidePlaneDrag() {
+        currentSidePlaneDrag = nil
+        hideExtensionsOnAllAxes()
         
-        // If no side was hit, reposition the bounding box in the XZ-plane.
-        startPlaneDrag(screenPos: screenPos, keepOffset: true)
-    }
-    
-    func updateAxisOrPlaneDrag(screenPos: CGPoint) {
-        if let drag = currentAxisDrag {
-            if let hitPos = sceneView.unprojectPointLocal(screenPos, ontoPlane: drag.planeTransform) {
-                // Project the result onto the plane's X axis & transform into world coordinates.
-                let posOnPlaneXAxis = float4(hitPos.x, 0, 0, 1)
-                let worldPosOnPlaneXAxis = drag.planeTransform * posOnPlaneXAxis
-                
-                self.simdWorldPosition = worldPosOnPlaneXAxis.xyz + drag.offset
-            }
-        } else {
-            updatePlaneDrag(screenPos: screenPos)
-        }
-    }
-    
-    func endAxisOrPlaneDrag() {
-        if currentAxisDrag != nil {
-            hideExtensionsOnAllAxes()
-            currentAxisDrag = nil
-        } else {
-            endPlaneDrag()
-        }
+        isSnappedToHorizontalPlane = false
     }
     
     func hideExtensionsOnAllAxes() {
@@ -295,44 +283,40 @@ class BoundingBox: SCNNode {
         }
     }
     
-    func startPlaneDrag(screenPos: CGPoint, keepOffset: Bool) {
+    func startGroundPlaneDrag(screenPos: CGPoint) {
         let dragPlane = self.simdWorldTransform
         var offset = float3(0)
-        if keepOffset, let hitPos = sceneView.unprojectPoint(screenPos, ontoPlane: dragPlane) {
+        if let hitPos = sceneView.unprojectPoint(screenPos, ontoPlane: dragPlane) {
             offset = self.simdWorldPosition - hitPos
         }
-        self.currentPlaneDrag = PlaneDrag(planeTransform: dragPlane, offset: offset)
+        self.currentGroundPlaneDrag = PlaneDrag(planeTransform: dragPlane, offset: offset)
         hasBeenAdjustedByUser = true
     }
     
-    func updatePlaneDrag(screenPos: CGPoint) {
+    func updateGroundPlaneDrag(screenPos: CGPoint) {
         sides[.bottom]?.showXAxisExtensions()
         sides[.bottom]?.showYAxisExtensions()
         
-        guard let drag = currentPlaneDrag else { return }
+        guard let drag = currentGroundPlaneDrag else { return }
         if let hitPos = sceneView.unprojectPoint(screenPos, ontoPlane: drag.planeTransform) {
             self.simdWorldPosition = hitPos + drag.offset
         }
     }
     
-    func endPlaneDrag() {
-        currentPlaneDrag = nil
+    func endGroundPlaneDrag() {
+        currentGroundPlaneDrag = nil
         sides[.bottom]?.hideXAxisExtensions()
         sides[.bottom]?.hideYAxisExtensions()
     }
     
     func isHit(screenPos: CGPoint) -> Bool {
-        
         let hitResults = sceneView.hitTest(screenPos, options: [
             .rootNode: sidesNode,
             .ignoreHiddenNodes: false])
         
-        for result in hitResults {
-            for (_, side) in sides where result.node == side {
-                return true
-            }
+        for result in hitResults where (result.node.parent as? BoundingBoxSide) != nil {
+            return true
         }
-        
         return false
     }
     
@@ -348,10 +332,12 @@ class BoundingBox: SCNNode {
     }
     
     func highlightCurrentTile() {
+        guard let camera = sceneView.pointOfView, !self.contains(camera.simdWorldPosition) else { return }
+
         // Create a new hit test ray. A line segment defined by its start and end point
         // is used to hit test against bounding box tiles. The ray's length allows for
         // intersections if the user is no more than five meters away from the bounding box.
-        let ray = Ray(from: sceneView.pointOfView!, length: 5.0)
+        let ray = Ray(from: camera, length: 5.0)
         
         for (_, side) in self.sides {
             for tile in side.tiles where tile.isHighlighted {
@@ -370,6 +356,8 @@ class BoundingBox: SCNNode {
     }
     
     func updateCapturingProgress() {
+        guard let camera = sceneView.pointOfView, !self.contains(camera.simdWorldPosition) else { return }
+        
         frameCounter += 1
 
         // Add new hit test rays at a lower frame rate to keep the list of previous rays
@@ -380,7 +368,7 @@ class BoundingBox: SCNNode {
             // Create a new hit test ray. A line segment defined by its start and end point
             // is used to hit test against bounding box tiles. The ray's length allows for
             // intersections if the user is no more than five meters away from the bounding box.
-            let currentRay = Ray(from: sceneView.pointOfView!, length: 5.0)
+            let currentRay = Ray(from: camera, length: 5.0)
             
             // Only remember the ray if it hit the bounding box,
             // and the hit location is significantly different from all previous hit locations.
@@ -394,47 +382,45 @@ class BoundingBox: SCNNode {
         // Update tiles at a frame rate that provides a trade-off between responsiveness and performance.
         guard frameCounter % 10 == 0, !isUpdatingCapturingProgress else { return }
         
-        ViewController.serialQueue.async {
-            self.isUpdatingCapturingProgress = true
-            
-            var capturedTiles: [Tile] = []
-            
-            // Perform hit tests with all previous rays.
-            for hitTest in self.cameraRaysAndHitLocations {
-                if let (tile, _) = self.tile(hitBy: hitTest.ray) {
-                    capturedTiles.append(tile)
-                    tile.isCaptured = true
-                }
+        self.isUpdatingCapturingProgress = true
+        
+        var capturedTiles: [Tile] = []
+        
+        // Perform hit tests with all previous rays.
+        for hitTest in self.cameraRaysAndHitLocations {
+            if let (tile, _) = self.tile(hitBy: hitTest.ray) {
+                capturedTiles.append(tile)
+                tile.isCaptured = true
             }
-            
-            for (_, side) in self.sides {
-                side.tiles.forEach {
-                    if !capturedTiles.contains($0) {
-                        $0.isCaptured = false
-                    }
-                }
-            }
-            
-            // Update the opacity of all tiles.
-            for (_, side) in self.sides {
-                side.tiles.forEach { $0.updateVisualization() }
-            }
-            
-            // Update scan percentage for all sides, except the bottom
-            var sum: Float = 0
-            for (pos, side) in self.sides where pos != .bottom {
-                sum += side.completion / 5.0
-            }
-            let progressPercentage: Int = min(Int(floor(sum * 100)), 100)
-            if self.progressPercentage != progressPercentage {
-                self.progressPercentage = progressPercentage
-                NotificationCenter.default.post(name: BoundingBox.scanPercentageChangedNotification,
-                                                object: self,
-                                                userInfo: [BoundingBox.scanPercentageUserInfoKey: progressPercentage])
-            }
-            
-            self.isUpdatingCapturingProgress = false
         }
+        
+        for (_, side) in self.sides {
+            side.tiles.forEach {
+                if !capturedTiles.contains($0) {
+                    $0.isCaptured = false
+                }
+            }
+        }
+        
+        // Update the opacity of all tiles.
+        for (_, side) in self.sides {
+            side.tiles.forEach { $0.updateVisualization() }
+        }
+        
+        // Update scan percentage for all sides, except the bottom
+        var sum: Float = 0
+        for (pos, side) in self.sides where pos != .bottom {
+            sum += side.completion / 5.0
+        }
+        let progressPercentage: Int = min(Int(floor(sum * 100)), 100)
+        if self.progressPercentage != progressPercentage {
+            self.progressPercentage = progressPercentage
+            NotificationCenter.default.post(name: BoundingBox.scanPercentageChangedNotification,
+                                            object: self,
+                                            userInfo: [BoundingBox.scanPercentageUserInfoKey: progressPercentage])
+        }
+        
+        self.isUpdatingCapturingProgress = false
     }
     
     /// Returns true if the given location differs from all hit locations in the cameraRaysAndHitLocations array
@@ -547,6 +533,18 @@ class BoundingBox: SCNNode {
             simdPosition.y -= offsetToNearestPlaneOnY / 2
             extent.y += offsetToNearestPlaneOnY
         }
+    }
+    
+    func contains(_ pointInWorld: float3) -> Bool {
+        let localMin = -extent / 2
+        let localMax = extent / 2
+        
+        // The bounding box is in local coordinates, so convert point to local, too.
+        let localPoint = self.simdConvertPosition(pointInWorld, from: nil)
+        
+        return (localMin.x...localMax.x).contains(localPoint.x) &&
+            (localMin.y...localMax.y).contains(localPoint.y) &&
+            (localMin.z...localMax.z).contains(localPoint.z)
     }
     
     required init?(coder aDecoder: NSCoder) {

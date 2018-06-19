@@ -96,6 +96,7 @@ struct Ray {
 }
 
 extension ARSCNView {
+    
     func unprojectPointLocal(_ point: CGPoint, ontoPlane planeTransform: float4x4) -> float3? {
         guard let result = unprojectPoint(point, ontoPlane: planeTransform) else {
             return nil
@@ -178,12 +179,33 @@ extension SCNNode {
         
         return node
     }
+    
+    func displayNodeHierarchyOnTop(_ isOnTop: Bool) {
+        // Recursivley traverses the node's children to update the rendering order depending on the `isOnTop` parameter.
+        func updateRenderOrder(for node: SCNNode) {
+            node.renderingOrder = isOnTop ? 2 : 0
+            
+            for material in node.geometry?.materials ?? [] {
+                material.readsFromDepthBuffer = !isOnTop
+            }
+            
+            for child in node.childNodes {
+                updateRenderOrder(for: child)
+            }
+        }
+        
+        updateRenderOrder(for: self)
+    }
 }
 
 extension CGPoint {
     /// Returns the length of a point when considered as a vector. (Used with gesture recognizers.)
     var length: CGFloat {
         return sqrt(x * x + y * y)
+    }
+    
+    static func +(left: CGPoint, right: CGPoint) -> CGPoint {
+        return CGPoint(x: left.x + right.x, y: left.y + right.y)
     }
 }
 
@@ -217,4 +239,19 @@ func dragPlaneTransform(for dragRay: Ray, cameraPos: float3) -> float4x4 {
                      float4(yVector, 0),
                      float4(zVector, 0),
                      float4(dragRay.origin, 1)])
+}
+
+func dragPlaneTransform(forPlaneNormal planeNormalRay: Ray, camera: SCNNode) -> float4x4 {
+    
+    // Create a transform for a XZ-plane. This transform can be passed to unproject() to
+    // map the user's touch position in screen space onto that plane in 3D space.
+    // The plane's transform is constructed from a given normal.
+    let yVector = normalize(planeNormalRay.direction)
+    let xVector = cross(yVector, camera.simdWorldRight)
+    let zVector = normalize(cross(xVector, yVector))
+    
+    return float4x4([float4(xVector, 0),
+                     float4(yVector, 0),
+                     float4(zVector, 0),
+                     float4(planeNormalRay.origin, 1)])
 }

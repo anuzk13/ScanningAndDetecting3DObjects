@@ -14,36 +14,48 @@ extension ViewController: UIGestureRecognizerDelegate {
         if state == .scanning {
             scan?.didTap(gesture)
         }
+        
+        hideInstructions()
     }
     
     @IBAction func didOneFingerPan(_ gesture: UIPanGestureRecognizer) {
         if state == .scanning {
             scan?.didOneFingerPan(gesture)
         }
+        
+        hideInstructions()
     }
     
     @IBAction func didTwoFingerPan(_ gesture: ThresholdPanGestureRecognizer) {
         if state == .scanning {
             scan?.didTwoFingerPan(gesture)
         }
+        
+        hideInstructions()
     }
     
     @IBAction func didRotate(_ gesture: ThresholdRotationGestureRecognizer) {
         if state == .scanning {
             scan?.didRotate(gesture)
         }
+        
+        hideInstructions()
     }
     
     @IBAction func didLongPress(_ gesture: UILongPressGestureRecognizer) {
         if state == .scanning {
             scan?.didLongPress(gesture)
         }
+        
+        hideInstructions()
     }
     
     @IBAction func didPinch(_ gesture: ThresholdPinchGestureRecognizer) {
         if state == .scanning {
             scan?.didPinch(gesture)
         }
+        
+        hideInstructions()
     }
     
     func gestureRecognizer(_ first: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith second: UIGestureRecognizer) -> Bool {

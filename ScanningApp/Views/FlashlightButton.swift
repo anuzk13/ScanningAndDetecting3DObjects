@@ -13,8 +13,18 @@ class FlashlightButton: RoundedButton {
     
     override var isHidden: Bool {
         didSet {
-            // Toggle the flashlight off when hiding the button.
-            toggledOn = false
+            // Never show this button if there is no torch on this device.
+            guard let captureDevice = AVCaptureDevice.default(for: .video), captureDevice.hasTorch else {
+                if !isHidden {
+                    isHidden = true
+                }
+                return
+            }
+            
+            if isHidden {
+                // Toggle the flashlight off when hiding the button.
+                toggledOn = false
+            }
         }
     }
     
@@ -31,7 +41,9 @@ class FlashlightButton: RoundedButton {
             
             // Toggle flashlight
             guard let captureDevice = AVCaptureDevice.default(for: .video), captureDevice.hasTorch else {
-                toggledOn = false
+                if toggledOn {
+                    toggledOn = false
+                }
                 return
             }
             

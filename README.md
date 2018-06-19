@@ -54,7 +54,10 @@ To enable object detection in an AR session, load the reference objects you want
 
 ```swift
 let configuration = ARWorldTrackingConfiguration()
-configuration.detectionObjects = ARReferenceObject.referenceObjects(inGroupNamed: "gallery", bundle: nil)
+guard let referenceObjects = ARReferenceObject.referenceObjects(inGroupNamed: "gallery", bundle: nil) else {
+    fatalError("Missing expected asset catalog resources.")
+}
+configuration.detectionObjects = referenceObjects
 sceneView.session.run(configuration)
 ```
 

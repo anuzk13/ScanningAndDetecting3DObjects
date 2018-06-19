@@ -19,24 +19,29 @@ extension ViewController {
             
         case .notAvailable:
             message = "\(stateString) not possible: \(trackingState.presentationString)"
-            timeOfLastSessionStatusChange = Date().timeIntervalSince1970
+            startTimeOfLastMessage = Date().timeIntervalSince1970
+            expirationTimeOfLastMessage = 3.0
             
         case .limited:
             message = "\(stateString) might not work: \(trackingState.presentationString)"
-            timeOfLastSessionStatusChange = Date().timeIntervalSince1970
+            startTimeOfLastMessage = Date().timeIntervalSince1970
+            expirationTimeOfLastMessage = 3.0
             
         default:
-            // Defer clearing the info label if the last message was less than 3 seconds ago.
-            let now = Date().timeIntervalSince1970
-            if let timeOfLastStatusChange = timeOfLastSessionStatusChange, now - timeOfLastStatusChange < 3.0 {
-                let timeToKeepLastMessageOnScreen = 3.0 - (now - timeOfLastStatusChange)
-                startMessageExpirationTimer(duration: timeToKeepLastMessageOnScreen)
-                
-                return
-            }
-            
             // No feedback needed when tracking is normal.
-            message = ""
+            // Defer clearing the info label if the last message hasn't reached its expiration time.
+            let now = Date().timeIntervalSince1970
+            if let startTimeOfLastMessage = startTimeOfLastMessage,
+                let expirationTimeOfLastMessage = expirationTimeOfLastMessage,
+                now - startTimeOfLastMessage < expirationTimeOfLastMessage {
+                let timeToKeepLastMessageOnScreen = expirationTimeOfLastMessage - (now - startTimeOfLastMessage)
+                startMessageExpirationTimer(duration: timeToKeepLastMessageOnScreen)
+            } else {
+                // Otherwise hide the info label immediately.
+                self.sessionInfoLabel.text = ""
+                self.sessionInfoView.isHidden = true
+            }
+            return
         }
         
         sessionInfoLabel.text = message
@@ -44,6 +49,8 @@ extension ViewController {
     }
     
     func displayMessage(_ message: String, expirationTime: TimeInterval) {
+        startTimeOfLastMessage = Date().timeIntervalSince1970
+        expirationTimeOfLastMessage = expirationTime
         DispatchQueue.main.async {
             self.sessionInfoLabel.text = message
             self.sessionInfoView.isHidden = false
@@ -58,6 +65,9 @@ extension ViewController {
             self.cancelMessageExpirationTimer()
             self.sessionInfoLabel.text = ""
             self.sessionInfoView.isHidden = true
+            
+            self.startTimeOfLastMessage = nil
+            self.expirationTimeOfLastMessage = nil
         }
     }
     

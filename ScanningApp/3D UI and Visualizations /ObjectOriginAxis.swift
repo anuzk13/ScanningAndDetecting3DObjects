@@ -28,19 +28,18 @@ class ObjectOriginAxis: SCNNode {
         
         self.flashTimer?.invalidate()
         self.flashTimer = Timer.scheduledTimer(withTimeInterval: flashDuration, repeats: false) { _ in
-            ViewController.serialQueue.async {
-                self.isHighlighted = false
-            }
+            self.isHighlighted = false
         }
     }
     
     // MARK: - Initializers
     
-    init(axis: Axis, length: Float, thickness: Float, radius: CGFloat, sphereRadius: CGFloat) {
+    init(axis: Axis, length: Float, thickness: Float, radius: CGFloat, handleSize: CGFloat) {
         self.axis = axis
         super.init()
         
         var color: UIColor
+        var texture: UIImage?
         var dimensions: float3
         let position = axis.normal * (length / 2.0)
         let axisHandlePosition = axis.normal * length
@@ -48,12 +47,15 @@ class ObjectOriginAxis: SCNNode {
         switch axis {
         case .x:
             color = UIColor.red
+            texture = #imageLiteral(resourceName: "handle_red")
             dimensions = float3(length, thickness, thickness)
         case .y:
             color = UIColor.green
+            texture = #imageLiteral(resourceName: "handle_green")
             dimensions = float3(thickness, length, thickness)
         case .z:
             color = UIColor.blue
+            texture = #imageLiteral(resourceName: "handle_blue")
             dimensions = float3(thickness, thickness, length)
         }
         
@@ -64,9 +66,10 @@ class ObjectOriginAxis: SCNNode {
         axisGeo.materials = [SCNMaterial.material(withDiffuse: color)]
         let axis = SCNNode(geometry: axisGeo)
         
-        let axisHandleGeo = SCNSphere(radius: sphereRadius)
-        axisHandleGeo.materials = [SCNMaterial.material(withDiffuse: color, respondsToLighting: true)]
+        let axisHandleGeo = SCNPlane(width: handleSize, height: handleSize)
+        axisHandleGeo.materials = [SCNMaterial.material(withDiffuse: texture, respondsToLighting: false)]
         let axisHandle = SCNNode(geometry: axisHandleGeo)
+        axisHandle.constraints = [SCNBillboardConstraint()]
         
         axis.simdPosition = position
         axisHandle.simdPosition = axisHandlePosition
@@ -74,7 +77,7 @@ class ObjectOriginAxis: SCNNode {
         // Increase the axis handle geometry's bounding box that is used for hit testing to make it easier to hit.
         let min = axisHandle.boundingBox.min
         let max = axisHandle.boundingBox.max
-        let padding = Float(sphereRadius) * 1.6
+        let padding = Float(handleSize) * 0.8
         axisHandle.boundingBox.min = SCNVector3(min.x - padding, min.y - padding, min.z - padding)
         axisHandle.boundingBox.max = SCNVector3(max.x + padding, max.y + padding, max.z + padding)
         

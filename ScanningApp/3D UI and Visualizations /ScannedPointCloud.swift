@@ -61,9 +61,7 @@ class ScannedPointCloud: SCNNode, PointCloud {
     }
     
     func updateBoundingBox(_ boundingBox: BoundingBox?) {
-        ViewController.serialQueue.async {
-            self.boundingBox = boundingBox
-        }
+        self.boundingBox = boundingBox
     }
     
     func update(_ pointCloud: ARPointCloud, for boundingBox: BoundingBox) {
@@ -74,9 +72,7 @@ class ScannedPointCloud: SCNNode, PointCloud {
             pointsInWorld.append(boundingBox.simdConvertPosition(point, to: nil))
         }
         
-        ViewController.serialQueue.async {
-            self.referenceObjectPoints = pointsInWorld
-        }
+        self.referenceObjectPoints = pointsInWorld
     }
     
     func updateOnEveryFrame() {

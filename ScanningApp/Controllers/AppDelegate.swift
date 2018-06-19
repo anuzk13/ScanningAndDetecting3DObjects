@@ -43,4 +43,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             viewController.backFromBackground()
         }
     }
+    
+    func applicationWillResignActive(_ application: UIApplication) {
+        if let viewController = self.window?.rootViewController as? ViewController {
+            viewController.blurView.isHidden = false
+        }
+    }
+    
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        if let viewController = self.window?.rootViewController as? ViewController {
+            viewController.blurView.isHidden = true
+        }
+    }
 }

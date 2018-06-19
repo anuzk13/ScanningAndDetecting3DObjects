@@ -93,8 +93,7 @@ class ScannedObject: SCNNode {
         // hasn't adjusted it yet.
         guard let boundingBox = self.boundingBox, !boundingBox.hasBeenAdjustedByUser else { return }
         
-        let screenCenter = CGPoint(x: sceneView.bounds.midX, y: sceneView.bounds.midY)
-        let hitTestResults = sceneView.hitTest(screenCenter, types: .featurePoint)
+        let hitTestResults = sceneView.hitTest(ViewController.instance!.screenCenter, types: .featurePoint)
         guard !hitTestResults.isEmpty else { return }
         
         let userFocusPoint = hitTestResults[0].worldTransform.position
@@ -138,8 +137,7 @@ class ScannedObject: SCNNode {
     
     private func updateOrCreateGhostBoundingBox() {
         // Perform a hit test against the feature point cloud.
-        let center = CGPoint(x: sceneView.bounds.midX, y: sceneView.bounds.midY)
-        guard let result = sceneView.smartHitTest(center) else {
+        guard let result = sceneView.smartHitTest(ViewController.instance!.screenCenter) else {
             ghostBoundingBox?.removeFromParentNode()
             ghostBoundingBox = nil
             NotificationCenter.default.post(name: ScannedObject.ghostBoundingBoxRemovedNotification, object: nil)
@@ -157,6 +155,11 @@ class ScannedObject: SCNNode {
         
         if let boundingBox = ghostBoundingBox {
             boundingBox.extent = float3(newExtent)
+            // Change the orientation of the bounding box to always face the user.
+            if let currentFrame = sceneView.session.currentFrame {
+                let cameraY = currentFrame.camera.eulerAngles.y
+                rotation = SCNVector4Make(0, 1, 0, cameraY)
+            }
         } else {
             let boundingBox = BoundingBox(sceneView)
             boundingBox.opacity = 0.25
@@ -211,11 +214,6 @@ class ScannedObject: SCNNode {
         // Correct y position so that the floor of the box remains at the same position.
         let diffOnY = oldYExtent - boundingBox.extent.y
         boundingBox.simdWorldPosition.y -= diffOnY / 2
-    }
-    
-    func scaleOrigin(scale: CGFloat) {
-        guard let origin = origin, origin.isDisplayingCustom3DModel else { return }
-        origin.simdScale *= float3(Float(scale))
     }
     
     @objc

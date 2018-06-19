@@ -25,6 +25,7 @@
 		39D6E980207A8956002CF536 /* DetectedPointCloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D6E97F207A8956002CF536 /* DetectedPointCloud.swift */; };
 		39D6E984207B1D05002CF536 /* ViewController+ApplicationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D6E983207B1D05002CF536 /* ViewController+ApplicationState.swift */; };
 		39E6F85A200EE27800B278CA /* Utilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39E6F859200EE27800B278CA /* Utilities.swift */; };
+		C42056AE20C75C9D003754C1 /* Snapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = C42056AD20C75C9D003754C1 /* Snapping.swift */; };
 		C4543844207F38460016097A /* art.scnassets in Resources */ = {isa = PBXBuildFile; fileRef = C4543843207F38460016097A /* art.scnassets */; };
 		C45BF9CA208E11420070CB19 /* ViewController+NavigationBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = C45BF9C9208E11420070CB19 /* ViewController+NavigationBar.swift */; };
 		C46B56342015D997001C41CE /* BoundingBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = C46B56332015D997001C41CE /* BoundingBox.swift */; };
@@ -45,6 +46,8 @@
 
 /* Begin PBXFileReference section */
 		1119C68220AA135700DDFCC2 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		36CAD5D036CAD68000000001 /* SampleCode.xcconfig */ = {isa = PBXFileReference; name = SampleCode.xcconfig; path = Configuration/SampleCode.xcconfig; sourceTree = "<group>"; };
+		36CF8AF036CFA5E000000001 /* LICENSE.txt */ = {isa = PBXFileReference; includeInIndex = 1; path = LICENSE.txt; sourceTree = "<group>"; };
 		390033E6206EE9F100C61E5D /* ObjectOrigin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectOrigin.swift; sourceTree = "<group>"; };
 		390033F3206F143F00C61E5D /* ScannedPointCloud.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannedPointCloud.swift; sourceTree = "<group>"; };
 		390033F7206F149100C61E5D /* BoundingBoxSide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoundingBoxSide.swift; sourceTree = "<group>"; };
@@ -64,8 +67,7 @@
 		39D6E97F207A8956002CF536 /* DetectedPointCloud.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetectedPointCloud.swift; sourceTree = "<group>"; };
 		39D6E983207B1D05002CF536 /* ViewController+ApplicationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ViewController+ApplicationState.swift"; sourceTree = "<group>"; };
 		39E6F859200EE27800B278CA /* Utilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utilities.swift; sourceTree = "<group>"; };
-		77DDFAB077DE000000000001 /* SampleCode.xcconfig */ = {isa = PBXFileReference; name = SampleCode.xcconfig; path = Configuration/SampleCode.xcconfig; sourceTree = "<group>"; };
-		7A74C4A07A74C55000000001 /* LICENSE.txt */ = {isa = PBXFileReference; includeInIndex = 1; path = LICENSE.txt; sourceTree = "<group>"; };
+		C42056AD20C75C9D003754C1 /* Snapping.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Snapping.swift; sourceTree = "<group>"; };
 		C4543843207F38460016097A /* art.scnassets */ = {isa = PBXFileReference; lastKnownFileType = wrapper.scnassets; name = art.scnassets; path = ScanningApp/art.scnassets; sourceTree = "<group>"; };
 		C45BF9C9208E11420070CB19 /* ViewController+NavigationBar.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "ViewController+NavigationBar.swift"; sourceTree = "<group>"; };
 		C46B56332015D997001C41CE /* BoundingBox.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BoundingBox.swift; sourceTree = "<group>"; };
@@ -108,6 +110,7 @@
 				C47CE841207B96830011A27B /* PointCloud+CreateVisualization.swift */,
 				3947D3E9207543D500BDBE95 /* ScannedObject.swift */,
 				390033F3206F143F00C61E5D /* ScannedPointCloud.swift */,
+				C42056AD20C75C9D003754C1 /* Snapping.swift */,
 				C4A938C4208799D3008D5D13 /* Tile.swift */,
 				3947D3FF2076927E00BDBE95 /* Wireframe.swift */,
 			);
@@ -136,6 +139,23 @@
 			path = "ScanningApp/Utility Extensions";
 			sourceTree = "<group>";
 		};
+		36CACAA036CAD8E000000001 /* Configuration */ = {
+			isa = PBXGroup;
+			children = (
+				36CAD5D036CAD68000000001 /* SampleCode.xcconfig */,
+			);
+			name = Configuration;
+			sourceTree = "<group>";
+		};
+		36CF8D7036CF8D4000000001 /* LICENSE */ = {
+			isa = PBXGroup;
+			children = (
+				36CF8AF036CFA5E000000001 /* LICENSE.txt */,
+			);
+			name = LICENSE;
+			path = LICENSE;
+			sourceTree = "<group>";
+		};
 		395C993B200707A30025413C = {
 			isa = PBXGroup;
 			children = (
@@ -151,8 +171,8 @@
 				395C9955200707A40025413C /* Info.plist */,
 				395C9945200707A30025413C /* Products */,
 				C4F50182203489740099B4BD /* Frameworks */,
-				77DDFF3077DE006000000001 /* Configuration */,
-				7A75B8707A74905000000001 /* LICENSE */,
+				36CACAA036CAD8E000000001 /* Configuration */,
+				36CF8D7036CF8D4000000001 /* LICENSE */,
 			);
 			sourceTree = "<group>";
 		};
@@ -162,23 +182,6 @@
 				395C9944200707A30025413C /* ScanningApp.app */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		77DDFF3077DE006000000001 /* Configuration */ = {
-			isa = PBXGroup;
-			children = (
-				77DDFAB077DE000000000001 /* SampleCode.xcconfig */,
-			);
-			name = Configuration;
-			sourceTree = "<group>";
-		};
-		7A75B8707A74905000000001 /* LICENSE */ = {
-			isa = PBXGroup;
-			children = (
-				7A74C4A07A74C55000000001 /* LICENSE.txt */,
-			);
-			name = LICENSE;
-			path = LICENSE;
 			sourceTree = "<group>";
 		};
 		C479BF30201F84D70030C57A /* Controllers */ = {
@@ -316,6 +319,7 @@
 				C49D033A20A07F34003D21D7 /* ThresholdPanGestureRecognizer.swift in Sources */,
 				C46B56342015D997001C41CE /* BoundingBox.swift in Sources */,
 				39435E522072FAD9009BD1A8 /* DetectedObject.swift in Sources */,
+				C42056AE20C75C9D003754C1 /* Snapping.swift in Sources */,
 				390033F8206F149100C61E5D /* BoundingBoxSide.swift in Sources */,
 				39778216209A704B003AA644 /* DetectedBoundingBox.swift in Sources */,
 				390033E7206EE9F100C61E5D /* ObjectOrigin.swift in Sources */,
@@ -357,7 +361,7 @@
 /* Begin XCBuildConfiguration section */
 		395C9956200707A40025413C /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 77DDFAB077DE000000000001 /* SampleCode.xcconfig */;
+			baseConfigurationReference = 36CAD5D036CAD68000000001 /* SampleCode.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -418,7 +422,7 @@
 		};
 		395C9957200707A40025413C /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 77DDFAB077DE000000000001 /* SampleCode.xcconfig */;
+			baseConfigurationReference = 36CAD5D036CAD68000000001 /* SampleCode.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -472,7 +476,7 @@
 		};
 		395C9959200707A40025413C /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 77DDFAB077DE000000000001 /* SampleCode.xcconfig */;
+			baseConfigurationReference = 36CAD5D036CAD68000000001 /* SampleCode.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -492,7 +496,7 @@
 		};
 		395C995A200707A40025413C /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 77DDFAB077DE000000000001 /* SampleCode.xcconfig */;
+			baseConfigurationReference = 36CAD5D036CAD68000000001 /* SampleCode.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";

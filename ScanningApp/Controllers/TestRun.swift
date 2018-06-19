@@ -34,6 +34,8 @@ class TestRun {
     
     init(sceneView: ARSCNView) {
         self.sceneView = sceneView
+        
+        startNoDetectionTimer()
     }
     
     deinit {
@@ -62,9 +64,7 @@ class TestRun {
         averageDetectionDelayInSeconds = 0
         
         self.detectedObject = DetectedObject(referenceObject: object)
-        ViewController.serialQueue.async {
-            self.sceneView.scene.rootNode.addChildNode(self.detectedObject!)
-        }
+        self.sceneView.scene.rootNode.addChildNode(self.detectedObject!)
         
         self.lastDetectionStartTime = Date()
         
@@ -91,15 +91,33 @@ class TestRun {
             self.detectedObject?.updateVisualization(newTransform: objectAnchor.transform,
                                                      currentPointCloud: currentPointCloud)
         }
+        
+        startNoDetectionTimer()
     }
     
     func updateOnEveryFrame() {
         if let detectedObject = self.detectedObject {
-            ViewController.serialQueue.async {
-                if let currentPointCloud = self.sceneView.session.currentFrame?.rawFeaturePoints {
-                    detectedObject.updatePointCloud(currentPointCloud)
-                }
+            if let currentPointCloud = self.sceneView.session.currentFrame?.rawFeaturePoints {
+                detectedObject.updatePointCloud(currentPointCloud)
             }
         }
+    }
+    
+    var noDetectionTimer: Timer?
+    
+    func startNoDetectionTimer() {
+        cancelNoDetectionTimer()
+        noDetectionTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { _ in
+            self.cancelNoDetectionTimer()
+            ViewController.instance?.displayMessage("""
+                Unable to detect the object.
+                Please point the device at the scanned object or rescan.
+                """, expirationTime: 5.0)
+        }
+    }
+    
+    func cancelNoDetectionTimer() {
+        noDetectionTimer?.invalidate()
+        noDetectionTimer = nil
     }
 }

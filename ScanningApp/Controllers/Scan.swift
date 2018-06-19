@@ -58,7 +58,8 @@ class Scan {
             case .adjustingOrigin where stateValue == .scanning && qualityIsLow:
                 let title = "Not enough detail"
                 let message = """
-                This scan has not enough detail. It is unlikely that a good reference object can be generated.
+                This scan has not enough detail (it contains \(pointCloud.count) features - aim for at least \(Scan.minFeatureCount)).
+                It is unlikely that a good reference object can be generated.
                 Do you want to go back and continue the scan?
                 """
                 ViewController.instance?.showAlert(title: title, message: message, buttonTitle: "Yes", showCancel: true) { _ in
@@ -88,6 +89,14 @@ class Scan {
         }
     }
     
+    var objectToManipulate: SCNNode? {
+        if state == .adjustingOrigin {
+            return scannedObject.origin
+        } else {
+            return scannedObject.eitherBoundingBox
+        }
+    }
+    
     // The object which we want to scan
     private(set) var scannedObject: ScannedObject
     
@@ -105,6 +114,8 @@ class Scan {
     
     private var hasWarnedAboutLowLight = false
     
+    static let minFeatureCount = 100
+    
     init(_ sceneView: ARSCNView) {
         self.sceneView = sceneView
         
@@ -116,10 +127,8 @@ class Scan {
                                                name: ViewController.appStateChangedNotification,
                                                object: nil)
         
-        ViewController.serialQueue.async {
-            self.sceneView.scene.rootNode.addChildNode(self.scannedObject)
-            self.sceneView.scene.rootNode.addChildNode(self.pointCloud)
-        }
+        self.sceneView.scene.rootNode.addChildNode(self.scannedObject)
+        self.sceneView.scene.rootNode.addChildNode(self.pointCloud)
     }
     
     deinit {
@@ -150,22 +159,22 @@ class Scan {
             case .possible:
                 break
             case .began:
-                scannedObject.boundingBox?.startAxisOrPlaneDrag(screenPos: gesture.location(in: sceneView))
+                scannedObject.boundingBox?.startSidePlaneDrag(screenPos: gesture.location(in: sceneView))
             case .changed:
-                scannedObject.boundingBox?.updateAxisOrPlaneDrag(screenPos: gesture.location(in: sceneView))
+                scannedObject.boundingBox?.updateSidePlaneDrag(screenPos: gesture.location(in: sceneView))
             case .failed, .cancelled, .ended:
-                scannedObject.boundingBox?.endAxisOrPlaneDrag()
+                scannedObject.boundingBox?.endSidePlaneDrag()
             }
         } else if state == .adjustingOrigin {
             switch gesture.state {
             case .possible:
                 break
             case .began:
-                scannedObject.origin?.startDrag(screenPos: gesture.location(in: sceneView), keepOffset: true)
+                scannedObject.origin?.startAxisDrag(screenPos: gesture.location(in: sceneView))
             case .changed:
-                scannedObject.origin?.updateDrag(screenPos: gesture.location(in: sceneView))
+                scannedObject.origin?.updateAxisDrag(screenPos: gesture.location(in: sceneView))
             case .failed, .cancelled, .ended:
-                scannedObject.origin?.endDrag()
+                scannedObject.origin?.endAxisDrag()
             }
         }
     }
@@ -181,16 +190,16 @@ class Scan {
                 break
             case .began:
                 if gesture.numberOfTouches == 2 {
-                    scannedObject.boundingBox?.startPlaneDrag(screenPos: gesture.location(in: sceneView), keepOffset: true)
+                    scannedObject.boundingBox?.startGroundPlaneDrag(screenPos: gesture.offsetLocation(in: sceneView))
                 }
             case .changed where gesture.isThresholdExceeded:
                 if gesture.numberOfTouches == 2 {
-                    scannedObject.boundingBox?.updatePlaneDrag(screenPos: gesture.location(in: sceneView))
+                    scannedObject.boundingBox?.updateGroundPlaneDrag(screenPos: gesture.offsetLocation(in: sceneView))
                 }
             case .changed:
                 break
             case .failed, .cancelled, .ended:
-                scannedObject.boundingBox?.endPlaneDrag()
+                scannedObject.boundingBox?.endGroundPlaneDrag()
             }
         } else if state == .adjustingOrigin {
             switch gesture.state {
@@ -198,16 +207,16 @@ class Scan {
                 break
             case .began:
                 if gesture.numberOfTouches == 2 {
-                    scannedObject.origin?.startDrag(screenPos: gesture.location(in: sceneView), keepOffset: true)
+                    scannedObject.origin?.startPlaneDrag(screenPos: gesture.offsetLocation(in: sceneView))
                 }
             case .changed where gesture.isThresholdExceeded:
                 if gesture.numberOfTouches == 2 {
-                    scannedObject.origin?.updateDrag(screenPos: gesture.location(in: sceneView))
+                    scannedObject.origin?.updatePlaneDrag(screenPos: gesture.offsetLocation(in: sceneView))
                 }
             case .changed:
                 break
             case .failed, .cancelled, .ended:
-                scannedObject.origin?.endDrag()
+                scannedObject.origin?.endPlaneDrag()
             }
         }
     }
@@ -223,7 +232,7 @@ class Scan {
             }
         } else if state == .adjustingOrigin {
             if gesture.state == .changed {
-                scannedObject.origin?.simdLocalRotate(by: simd_quatf(angle: -Float(gesture.rotationDelta), axis: .y))
+                scannedObject.origin?.rotateWithSnappingOnYAxis(by: -Float(gesture.rotationDelta))
             }
         }
     }
@@ -249,11 +258,11 @@ class Scan {
             case .possible:
                 break
             case .began:
-                scannedObject.origin?.startDrag(screenPos: gesture.location(in: sceneView), keepOffset: true)
+                scannedObject.origin?.startAxisDrag(screenPos: gesture.location(in: sceneView))
             case .changed:
-                scannedObject.origin?.updateDrag(screenPos: gesture.location(in: sceneView))
+                scannedObject.origin?.updateAxisDrag(screenPos: gesture.location(in: sceneView))
             case .failed, .cancelled, .ended:
-                scannedObject.origin?.endDrag()
+                scannedObject.origin?.endAxisDrag()
             }
         }
     }
@@ -296,7 +305,7 @@ class Scan {
             case .possible, .began:
                 break
             case .changed where gesture.isThresholdExceeded:
-                scannedObject.scaleOrigin(scale: gesture.scale)
+                scannedObject.origin?.updateScale(Float(gesture.scale))
                 gesture.scale = 1
             case .changed, .failed, .cancelled, .ended:
                 break
@@ -353,7 +362,7 @@ class Scan {
     }
     
     var qualityIsLow: Bool {
-        return pointCloud.count < 100
+        return pointCloud.count < Scan.minFeatureCount
     }
     
     var boundingBoxExists: Bool {
@@ -413,12 +422,25 @@ class Scan {
             print("Error: Failed to create a screenshot - no current ARFrame exists.")
             return
         }
+
+        var orientation: UIImage.Orientation = .right
+        switch UIDevice.current.orientation {
+        case .portrait:
+            orientation = .right
+        case .portraitUpsideDown:
+            orientation = .left
+        case .landscapeLeft:
+            orientation = .up
+        case .landscapeRight:
+            orientation = .down
+        default:
+            break
+        }
         
         let ciImage = CIImage(cvPixelBuffer: frame.capturedImage)
         let context = CIContext()
-        if let cgimage = context.createCGImage(ciImage, from: CGRect(x: 0, y: 0, width:
-            frame.camera.imageResolution.width, height: frame.camera.imageResolution.height)) {
-            screenshot = UIImage(cgImage: cgimage, scale: 1.0, orientation: .right)
+        if let cgimage = context.createCGImage(ciImage, from: ciImage.extent) {
+            screenshot = UIImage(cgImage: cgimage, scale: 1.0, orientation: orientation)
         }
     }
 }

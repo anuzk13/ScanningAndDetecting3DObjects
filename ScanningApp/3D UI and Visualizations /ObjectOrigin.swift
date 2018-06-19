@@ -14,6 +14,7 @@ import ARKit
 class ObjectOrigin: SCNNode {
     
     static let movedOutsideBoxNotification = Notification.Name("ObjectOriginMovedOutsideBoundingBox")
+    static let positionChangedNotification = Notification.Name("ObjectOriginPositionChanged")
     
     private let axisLength: Float = 1.0
     private let axisThickness: Float = 6.0 // Axis thickness in percent of length.
@@ -28,15 +29,18 @@ class ObjectOrigin: SCNNode {
     
     private var customModel: SCNNode?
     
-    private var omniLightNode: SCNNode?
-    private var ambientLightNode: SCNNode?
-    
     private var currentAxisDrag: PlaneDrag?
     private var currentPlaneDrag: PlaneDrag?
     
     private var sceneView: ARSCNView
     
     var positionHasBeenAdjustedByUser: Bool = false
+    
+    /// Variables related to current snapping state
+    internal var isSnappedToSide = false
+    internal var isSnappedToBottomCenter = false
+    internal var isSnappedTo90DegreeRotation = false
+    internal var totalRotationSinceLastSnap: Float = 0
     
     var isDisplayingCustom3DModel: Bool {
         return customModel != nil
@@ -49,18 +53,20 @@ class ObjectOrigin: SCNNode {
         let length = axisLength
         let thickness = (axisLength / 100.0) * axisThickness
         let radius = CGFloat(axisThickness / 2.0)
-        let sphereRadius = CGFloat(axisLength / 8)
+        let handleSize = CGFloat(axisLength / 4)
         
         xAxis = ObjectOriginAxis(axis: .x, length: length, thickness: thickness, radius: radius,
-                                 sphereRadius: sphereRadius)
+                                 handleSize: handleSize)
         yAxis = ObjectOriginAxis(axis: .y, length: length, thickness: thickness, radius: radius,
-                                 sphereRadius: sphereRadius)
+                                 handleSize: handleSize)
         zAxis = ObjectOriginAxis(axis: .z, length: length, thickness: thickness, radius: radius,
-                                 sphereRadius: sphereRadius)
+                                 handleSize: handleSize)
         
-        setupShading()
+        addChildNode(xAxis)
+        addChildNode(yAxis)
+        addChildNode(zAxis)
+        
         set3DModel(ViewController.instance?.modelURL, extentForScaling: extent)
-        adjustToExtent(extent)
         
         NotificationCenter.default.addObserver(self, selector: #selector(self.scanningStateChanged(_:)),
                                                name: Scan.stateChangedNotification, object: nil)
@@ -70,27 +76,22 @@ class ObjectOrigin: SCNNode {
     }
     
     func set3DModel(_ url: URL?, extentForScaling: float3?=nil) {
+        customModel?.removeFromParentNode()
+        customModel = nil
+        
         if let url = url, let model = load3DModel(from: url) {
-            customModel?.removeFromParentNode()
-            customModel = nil
-            xAxis.removeFromParentNode()
-            yAxis.removeFromParentNode()
-            zAxis.removeFromParentNode()
-            omniLightNode?.isHidden = true
-            ambientLightNode?.isHidden = true
             ViewController.instance?.sceneView.prepare([model], completionHandler: { _ in
                 self.addChildNode(model)
             })
             customModel = model
-        } else {
-            customModel?.removeFromParentNode()
-            customModel = nil
             
-            addChildNode(xAxis)
-            addChildNode(yAxis)
-            addChildNode(zAxis)
-            omniLightNode?.isHidden = false
-            ambientLightNode?.isHidden = false
+            xAxis.displayNodeHierarchyOnTop(true)
+            yAxis.displayNodeHierarchyOnTop(true)
+            zAxis.displayNodeHierarchyOnTop(true)
+        } else {
+            xAxis.displayNodeHierarchyOnTop(false)
+            yAxis.displayNodeHierarchyOnTop(false)
+            zAxis.displayNodeHierarchyOnTop(false)
         }
         
         adjustToExtent(extentForScaling)
@@ -111,136 +112,159 @@ class ObjectOrigin: SCNNode {
             return
         }
         
+        // By default the origin's scale is 1x.
+        self.simdScale = float3(1.0)
+        
+        // Compute a good scale for the axes based on the extent of the bouning box,
+        // but stay within a reasonable range.
+        var axesScale = min(extent.x, extent.y, extent.z) * axisSizeToObjectSizeRatio
+        axesScale = max(min(axesScale, maxAxisSize), minAxisSize)
+        
+        // Adjust the scale of the axes (not the origin itself!)
+        xAxis.simdScale = float3(axesScale)
+        yAxis.simdScale = float3(axesScale)
+        zAxis.simdScale = float3(axesScale)
+        
         if let model = customModel {
             // Scale the origin such that the custom 3D model fits into the given extent.
             let modelExtent = model.boundingSphere.radius * 2
-            let scaleFactor = min(extent.x, extent.y, extent.z) / modelExtent
-            self.simdScale = float3(scaleFactor)
-        } else {
-            // Make sure the origin's scale is 1 if we aren't displaying a custom 3D model.
-            self.simdScale = float3(1.0)
+            let originScale = min(extent.x, extent.y, extent.z) / modelExtent
             
-            var scaleFactor = max(extent.x, extent.y, extent.z) * axisSizeToObjectSizeRatio
+            // Scale the origin itself, so that the scale will be preserved in the *.arobject file.
+            self.simdScale = float3(originScale)
             
-            // Stay within minimal and maximal size
-            scaleFactor = min(scaleFactor, maxAxisSize)
-            scaleFactor = max(scaleFactor, minAxisSize)
-            
-            // Adjust the scale of the axes (not the origin itself!)
-            xAxis.simdScale = float3(scaleFactor)
-            yAxis.simdScale = float3(scaleFactor)
-            zAxis.simdScale = float3(scaleFactor)
+            // Correct the scale of the axes to be the same size as before
+            xAxis.simdScale *= (1 / originScale)
+            yAxis.simdScale *= (1 / originScale)
+            zAxis.simdScale *= (1 / originScale)
         }
     }
     
-    private func setupShading() {
-        let omniLight = SCNLight()
-        omniLight.type = .omni
-        omniLight.intensity = 500
-        let omniLightNode = SCNNode()
-        omniLightNode.light = omniLight
-        addChildNode(omniLightNode)
-        self.omniLightNode = omniLightNode
+    func updateScale(_ scale: Float) {
+        // If a 3D model is being displayed, users should be able to change the scale
+        // of the origin. This ensures that the scale at which the 3D model is displayed
+        // will be preserved in the *.arobject file.
+        if isDisplayingCustom3DModel {
+            self.simdScale *= float3(scale)
+            
+            // Correct the scale of the axes to be displayed at the same size as before.
+            xAxis.simdScale *= (1 / scale)
+            yAxis.simdScale *= (1 / scale)
+            zAxis.simdScale *= (1 / scale)
+        }
+    }
+    
+    func startAxisDrag(screenPos: CGPoint) {
+        guard let camera = sceneView.pointOfView else { return }
+    
+        // Check if the user is starting the drag on one of the axes. If so, drag along that axis.
+        let hitResults = sceneView.hitTest(screenPos, options: [
+            .rootNode: self,
+            .boundingBoxOnly: true])
         
-        let ambientLight = SCNLight()
-        ambientLight.type = .ambient
-        ambientLight.intensity = 500
-        let ambientLightNode = SCNNode()
-        ambientLightNode.light = ambientLight
-        addChildNode(ambientLightNode)
-        self.ambientLightNode = ambientLightNode
-    }
-    
-    func startDrag(screenPos: CGPoint, keepOffset: Bool) {
-        if !isDisplayingCustom3DModel {
-            guard let camera = sceneView.pointOfView else { return }
-
-            // Check if the user is starting the drag on one of the axes. If so, drag along that axis.
-            let hitResults = sceneView.hitTest(screenPos, options: [
-                .rootNode: self,
-                .boundingBoxOnly: true])
-            
-            for result in hitResults {
-                if let hitAxis = result.node.parent as? ObjectOriginAxis {
-                    hitAxis.isHighlighted = true
-                    
-                    let worldAxis = hitAxis.simdConvertVector(hitAxis.axis.normal, to: nil)
-                    let worldPosition = hitAxis.simdConvertVector(float3(0), to: nil)
-                    let hitAxisNormalInWorld = normalize(worldAxis - worldPosition)
-
-                    let dragRay = Ray(origin: self.simdWorldPosition, direction: hitAxisNormalInWorld)
-                    let transform = dragPlaneTransform(for: dragRay, cameraPos: camera.simdWorldPosition)
-                    
-                    var offset = float3()
-                    if let hitPos = sceneView.unprojectPointLocal(screenPos, ontoPlane: transform) {
-                        // Project the result onto the plane's X axis & transform into world coordinates.
-                        let posOnPlaneXAxis = float4(hitPos.x, 0, 0, 1)
-                        let worldPosOnPlaneXAxis = transform * posOnPlaneXAxis
-                        
-                        offset = self.simdWorldPosition - worldPosOnPlaneXAxis.xyz
-                    }
-                    
-                    currentAxisDrag = PlaneDrag(planeTransform: transform, offset: offset)
-                    positionHasBeenAdjustedByUser = true
-                    return
-                }
-            }
-        }
-        
-        // If no axis was hit, reposition the origin in the XZ-plane.
-        let dragPlane = self.simdWorldTransform
-        var offset = float3(0)
-        if keepOffset, let hitPos = sceneView.unprojectPoint(screenPos, ontoPlane: dragPlane) {
-            offset = self.simdWorldPosition - hitPos
-        }
-        self.currentPlaneDrag = PlaneDrag(planeTransform: dragPlane, offset: offset)
-        positionHasBeenAdjustedByUser = true
-    }
-    
-    func updateDrag(screenPos: CGPoint) {
-        if let drag = currentPlaneDrag {
-            if let hitPos = sceneView.unprojectPoint(screenPos, ontoPlane: drag.planeTransform) {
-                self.simdWorldPosition = hitPos + drag.offset
+        for result in hitResults {
+            if let hitAxis = result.node.parent as? ObjectOriginAxis {
+                hitAxis.isHighlighted = true
                 
-                if isOutsideBoundingBox {
-                    NotificationCenter.default.post(name: ObjectOrigin.movedOutsideBoxNotification, object: self)
-                }
-            }
-        } else if let drag = currentAxisDrag {
-            if let hitPos = sceneView.unprojectPointLocal(screenPos, ontoPlane: drag.planeTransform) {
-                // Project the result onto the plane's X axis & transform into world coordinates.
-                let posOnPlaneXAxis = float4(hitPos.x, 0, 0, 1)
-                let worldPosOnPlaneXAxis = drag.planeTransform * posOnPlaneXAxis
+                let worldAxis = hitAxis.simdConvertVector(hitAxis.axis.normal, to: nil)
+                let worldPosition = hitAxis.simdConvertVector(float3(0), to: nil)
+                let hitAxisNormalInWorld = normalize(worldAxis - worldPosition)
 
-                self.simdWorldPosition = worldPosOnPlaneXAxis.xyz + drag.offset
+                let dragRay = Ray(origin: self.simdWorldPosition, direction: hitAxisNormalInWorld)
+                let transform = dragPlaneTransform(for: dragRay, cameraPos: camera.simdWorldPosition)
+                
+                var offset = float3()
+                if let hitPos = sceneView.unprojectPointLocal(screenPos, ontoPlane: transform) {
+                    // Project the result onto the plane's X axis & transform into world coordinates.
+                    let posOnPlaneXAxis = float4(hitPos.x, 0, 0, 1)
+                    let worldPosOnPlaneXAxis = transform * posOnPlaneXAxis
 
-                if isOutsideBoundingBox {
-                    NotificationCenter.default.post(name: ObjectOrigin.movedOutsideBoxNotification, object: self)
+                    offset = self.simdWorldPosition - worldPosOnPlaneXAxis.xyz
                 }
+                
+                currentAxisDrag = PlaneDrag(planeTransform: transform, offset: offset)
+                positionHasBeenAdjustedByUser = true
+                return
             }
         }
     }
     
-    func endDrag() {
-        currentPlaneDrag = nil
+    func updateAxisDrag(screenPos: CGPoint) {
+        guard let drag = currentAxisDrag else { return }
+        
+        if let hitPos = sceneView.unprojectPointLocal(screenPos, ontoPlane: drag.planeTransform) {
+            // Project the result onto the plane's X axis & transform into world coordinates.
+            let posOnPlaneXAxis = float4(hitPos.x, 0, 0, 1)
+            let worldPosOnPlaneXAxis = drag.planeTransform * posOnPlaneXAxis
+
+            self.simdWorldPosition = worldPosOnPlaneXAxis.xyz + drag.offset
+            
+            if customModel == nil {
+                // Snap origin to any side of the bounding box and to the bottom center.
+                snapToBoundingBoxSide()
+            }
+
+            NotificationCenter.default.post(name: ObjectOrigin.positionChangedNotification, object: self)
+
+            if isOutsideBoundingBox {
+                NotificationCenter.default.post(name: ObjectOrigin.movedOutsideBoxNotification, object: self)
+            }
+        }
+    }
+    
+    func endAxisDrag() {
         currentAxisDrag = nil
         xAxis.isHighlighted = false
         yAxis.isHighlighted = false
         zAxis.isHighlighted = false
     }
     
-    func flashOrReposition(screenPos: CGPoint) {
-        if !isDisplayingCustom3DModel {
-            // Check if the user tapped on one of the axes. If so, highlight it.
-            let hitResults = sceneView.hitTest(screenPos, options: [
-                .rootNode: self,
-                .boundingBoxOnly: true])
+    func startPlaneDrag(screenPos: CGPoint) {
+        // Reposition the origin in the XZ-plane.
+        let dragPlane = self.simdWorldTransform
+        var offset = float3(0)
+        if let hitPos = sceneView.unprojectPoint(screenPos, ontoPlane: dragPlane) {
+            offset = self.simdWorldPosition - hitPos
+        }
+        self.currentPlaneDrag = PlaneDrag(planeTransform: dragPlane, offset: offset)
+        positionHasBeenAdjustedByUser = true
+    }
+    
+    func updatePlaneDrag(screenPos: CGPoint) {
+        guard let drag = currentPlaneDrag else { return }
+        
+        if let hitPos = sceneView.unprojectPoint(screenPos, ontoPlane: drag.planeTransform) {
+            self.simdWorldPosition = hitPos + drag.offset
             
-            for result in hitResults {
-                if let hitAxis = result.node.parent as? ObjectOriginAxis {
-                    hitAxis.flash()
-                    return
-                }
+            if customModel == nil {
+                snapToBoundingBoxSide()
+            }
+            snapToBoundingBoxCenter()
+
+            NotificationCenter.default.post(name: ObjectOrigin.positionChangedNotification, object: self)
+            
+            if isOutsideBoundingBox {
+                NotificationCenter.default.post(name: ObjectOrigin.movedOutsideBoxNotification, object: self)
+            }
+        }
+    }
+    
+    func endPlaneDrag() {
+        currentPlaneDrag = nil
+        isSnappedToSide = false
+        isSnappedToBottomCenter = false
+    }
+    
+    func flashOrReposition(screenPos: CGPoint) {
+        // Check if the user tapped on one of the axes. If so, highlight it.
+        let hitResults = sceneView.hitTest(screenPos, options: [
+            .rootNode: self,
+            .boundingBoxOnly: true])
+        
+        for result in hitResults {
+            if let hitAxis = result.node.parent as? ObjectOriginAxis {
+                hitAxis.flash()
+                return
             }
         }
         

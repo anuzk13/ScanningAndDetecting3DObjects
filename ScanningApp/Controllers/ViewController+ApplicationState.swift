@@ -71,7 +71,7 @@ extension ViewController {
                 testRun = nil
                 modelURL = nil
                 self.setNavigationBarTitle("")
-                instructionView.isHidden = true
+                instructionsVisible = false
                 showBackButton(false)
                 nextButton.isEnabled = false
                 loadModelButton.isHidden = true

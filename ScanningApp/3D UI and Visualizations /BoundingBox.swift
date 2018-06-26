@@ -21,8 +21,7 @@ class BoundingBox: SCNNode {
             extent = max(extent, minSize)
             updateVisualization()
             NotificationCenter.default.post(name: BoundingBox.extentChangedNotification,
-                                            object: self,
-                                            userInfo: [BoundingBox.boxExtentUserInfoKey: extent])
+                                            object: self)
         }
     }
     

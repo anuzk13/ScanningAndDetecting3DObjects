@@ -57,6 +57,13 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
         }
     }
     
+    var instructionsVisible: Bool = true {
+        didSet {
+            instructionView.isHidden = !instructionsVisible
+            toggleInstructionsButton.toggledOn = instructionsVisible
+        }
+    }
+    
     // MARK: - Application Lifecycle
     
     override func viewWillAppear(_ animated: Bool) {
@@ -88,9 +95,9 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
                                        name: ScannedObject.boundingBoxCreatedNotification, object: nil)
         notificationCenter.addObserver(self, selector: #selector(scanPercentageChanged),
                                        name: BoundingBox.scanPercentageChangedNotification, object: nil)
-        notificationCenter.addObserver(self, selector: #selector(boundingBoxExtentChanged(_:)),
+        notificationCenter.addObserver(self, selector: #selector(boundingBoxPositionOrExtentChanged(_:)),
                                        name: BoundingBox.extentChangedNotification, object: nil)
-        notificationCenter.addObserver(self, selector: #selector(boundingBoxPositionChanged(_:)),
+        notificationCenter.addObserver(self, selector: #selector(boundingBoxPositionOrExtentChanged(_:)),
                                        name: BoundingBox.positionChangedNotification, object: nil)
         notificationCenter.addObserver(self, selector: #selector(objectOriginPositionChanged(_:)),
                                        name: ObjectOrigin.positionChangedNotification, object: nil)
@@ -186,23 +193,12 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
     
     @IBAction func toggleInstructionsButtonTapped(_ sender: Any) {
         guard !toggleInstructionsButton.isHidden && toggleInstructionsButton.isEnabled else { return }
-        
-        toggleInstructionsButton.toggledOn ? hideInstructions() : showInstructions()
+        instructionsVisible.toggle()
     }
     
     func displayInstruction(_ message: Message) {
         instructionLabel.display(message)
-        showInstructions()
-    }
-    
-    func hideInstructions() {
-        instructionView.isHidden = true
-        toggleInstructionsButton.toggledOn = false
-    }
-    
-    func showInstructions() {
-        instructionView.isHidden = false
-        toggleInstructionsButton.toggledOn = true
+        instructionsVisible = true
     }
     
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
@@ -419,22 +415,15 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
     }
     
     @objc
-    func boundingBoxExtentChanged(_ notification: Notification) {
-        guard let extent = notification.userInfo?[BoundingBox.boxExtentUserInfoKey] as? float3 else { return }
-        
-        let xString = String(format: "x: %.2f", extent.x)
-        let yString = String(format: "y: %.2f", extent.y)
-        let zString = String(format: "z: %.2f", extent.z)
-        displayMessage("Current bounding box size in meters:\n\(xString) \(yString) \(zString)", expirationTime: 1.5)
-    }
-    
-    @objc
-    func boundingBoxPositionChanged(_ notification: Notification) {
-        guard let node = notification.object as? BoundingBox,
+    func boundingBoxPositionOrExtentChanged(_ notification: Notification) {
+        guard let box = notification.object as? BoundingBox,
             let cameraPos = sceneView.pointOfView?.simdWorldPosition else { return }
         
-        let distanceFromCamera = String(format: "%.2f", distance(node.simdWorldPosition, cameraPos))
-        displayMessage("Current bounding box distance: \(distanceFromCamera) m", expirationTime: 1.5)
+        let xString = String(format: "width: %.2f", box.extent.x)
+        let yString = String(format: "height: %.2f", box.extent.y)
+        let zString = String(format: "length: %.2f", box.extent.z)
+        let distanceFromCamera = String(format: "%.2f m", distance(box.simdWorldPosition, cameraPos))
+        displayMessage("Current bounding box: \(distanceFromCamera) away\n\(xString) \(yString) \(zString)", expirationTime: 1.5)
     }
     
     @objc
@@ -456,5 +445,13 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
             let buttonTitle = "OK"
             self.showAlert(title: title, message: message, buttonTitle: buttonTitle, showCancel: false)
         }
+    }
+    
+    override var shouldAutorotate: Bool {
+        // Lock UI rotation after starting a scan
+        if let scan = scan, scan.state != .ready {
+            return false
+        }
+        return true
     }
 }

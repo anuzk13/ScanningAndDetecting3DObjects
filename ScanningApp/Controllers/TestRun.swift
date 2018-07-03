@@ -34,8 +34,6 @@ class TestRun {
     
     init(sceneView: ARSCNView) {
         self.sceneView = sceneView
-        
-        startNoDetectionTimer()
     }
     
     deinit {
@@ -56,9 +54,11 @@ class TestRun {
         return "Detected after: \(lastDelayMilliseconds) ms. Avg: \(averageDelayMilliseconds) ms"
     }
     
-    func setReferenceObject(_ object: ARReferenceObject, screenshot: UIImage) {
+    func setReferenceObject(_ object: ARReferenceObject, screenshot: UIImage?) {
         referenceObject = object
-        previewImage = screenshot
+        if let screenshot = screenshot {
+            previewImage = screenshot
+        }
         detections = 0
         lastDetectionDelayInSeconds = 0
         averageDetectionDelayInSeconds = 0
@@ -71,6 +71,8 @@ class TestRun {
         let configuration = ARWorldTrackingConfiguration()
         configuration.detectionObjects = [object]
         self.sceneView.session.run(configuration)
+        
+        startNoDetectionTimer()
     }
     
     func successfulDetection(_ objectAnchor: ARObjectAnchor) {
@@ -111,7 +113,8 @@ class TestRun {
             self.cancelNoDetectionTimer()
             ViewController.instance?.displayMessage("""
                 Unable to detect the object.
-                Please point the device at the scanned object or rescan.
+                Please point the device at the scanned object, rescan or add another scan
+                of this object in the current environment.
                 """, expirationTime: 5.0)
         }
     }

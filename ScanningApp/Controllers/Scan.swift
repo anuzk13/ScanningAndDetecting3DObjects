@@ -409,7 +409,45 @@ class Scan {
                     self.scannedReferenceObject =
                         referenceObject.applyingTransform(origin.simdTransform)
                     self.scannedReferenceObject!.name = self.scannedObject.scanName
-                    creationFinished(self.scannedReferenceObject)
+                    
+                    if let referenceObjectToMerge = ViewController.instance?.referenceObjectToMerge {
+                        ViewController.instance?.referenceObjectToMerge = nil
+                        
+                        // Show activity indicator during the merge.
+                        ViewController.instance?.showAlert(title: "", message: "Merging previous scan into this scan...", buttonTitle: nil)
+                        
+                        // Try to merge the object which was just scanned with the existing one.
+                        self.scannedReferenceObject?.mergeInBackground(with: referenceObjectToMerge, completion: { (mergedObject, error) in
+                            var title: String
+                            var message: String
+                            
+                            if let mergedObject = mergedObject {
+                                mergedObject.name = self.scannedReferenceObject?.name
+                                self.scannedReferenceObject = mergedObject
+
+                                title = "Merge successful"
+                                message = "The previous scan has been merged into this scan."
+                                
+                            } else {
+                                print("Error: Failed to merge scans. \(error?.localizedDescription ?? "")")
+                                title = "Merge failed"
+                                message = """
+                                        Merging the previous scan into this scan failed. Please make sure that
+                                        there is sufficient overlap between both scans and that the lighting
+                                        environment hasn't changed drastically.
+                                        """
+                            }
+                            
+                            // Hide activity indicator and inform the user about the result of the merge.
+                            ViewController.instance?.dismiss(animated: true) {
+                                ViewController.instance?.showAlert(title: title, message: message, buttonTitle: "OK", showCancel: false)
+                            }
+
+                            creationFinished(self.scannedReferenceObject)
+                        })
+                    } else {
+                        creationFinished(self.scannedReferenceObject)
+                    }
                 } else {
                     print("Error: Failed to create reference object. \(error!.localizedDescription)")
                     creationFinished(nil)

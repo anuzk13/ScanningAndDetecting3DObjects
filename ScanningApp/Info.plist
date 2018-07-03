@@ -18,6 +18,16 @@
 				<string>com.pixar.universal-scene-description.mobile</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeIconFiles</key>
+			<array/>
+			<key>CFBundleTypeName</key>
+			<string>ARObject</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.apple.arobject</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
@@ -79,6 +89,25 @@
 				<key>public.filename-extension</key>
 				<array>
 					<string>usdz</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>ARObject</string>
+			<key>UTTypeIconFiles</key>
+			<array/>
+			<key>UTTypeIdentifier</key>
+			<string>com.apple.arobject</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>arobject</string>
 				</array>
 			</dict>
 		</dict>

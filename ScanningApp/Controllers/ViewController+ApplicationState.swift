@@ -111,7 +111,7 @@ extension ViewController {
                 self.setNavigationBarTitle("Test")
                 loadModelButton.isHidden = true
                 flashlightButton.isHidden = false
-                showBackButton(false)
+                showAddToScanButton()
                 nextButton.isEnabled = true
                 nextButton.setTitle("Share", for: [])
                 

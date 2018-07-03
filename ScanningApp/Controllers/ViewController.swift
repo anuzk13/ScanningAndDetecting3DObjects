@@ -20,6 +20,7 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
     @IBOutlet weak var blurView: UIVisualEffectView!
     @IBOutlet weak var nextButton: RoundedButton!
     var backButton: UIBarButtonItem!
+    var addToScanButton: UIBarButtonItem!
     @IBOutlet weak var instructionView: UIVisualEffectView!
     @IBOutlet weak var instructionLabel: MessageLabel!
     @IBOutlet weak var loadModelButton: RoundedButton!
@@ -34,6 +35,7 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
     internal var scan: Scan?
     
     private var initialARReferenceObject: ARReferenceObject?
+    var referenceObjectToMerge: ARReferenceObject?
     
     internal var testRun: TestRun?
     
@@ -161,6 +163,17 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
         switchToNextState()
     }
     
+    @IBAction func addScanButtonTapped(_ sender: Any) {
+        guard state == .testing else { return }
+        let title = "Add new scan?"
+        let message = "Stop testing this scan and add a second scan?"
+        self.showAlert(title: title, message: message, buttonTitle: "Yes", showCancel: true) { _ in
+            // Save the previously scanned object as the object to be merged into the next scan.
+            self.referenceObjectToMerge = self.testRun?.referenceObject
+            self.state = .startARSession
+        }
+    }
+    
     @IBAction func loadModelButtonTapped(_ sender: Any) {
         guard !loadModelButton.isHidden && loadModelButton.isEnabled else { return }
         
@@ -206,10 +219,12 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
         modelURL = urls[0]
     }
     
-    func showAlert(title: String, message: String, buttonTitle: String = "OK", showCancel: Bool = false, buttonHandler: ((UIAlertAction) -> Void)? = nil) {
+    func showAlert(title: String, message: String, buttonTitle: String? = "OK", showCancel: Bool = false, buttonHandler: ((UIAlertAction) -> Void)? = nil) {
         print(title + "\n" + message)
         let alertController = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        alertController.addAction(UIAlertAction(title: buttonTitle, style: .default, handler: buttonHandler))
+        if let buttonTitle = buttonTitle {
+            alertController.addAction(UIAlertAction(title: buttonTitle, style: .default, handler: buttonHandler))
+        }
         if showCancel {
             alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         }
@@ -397,6 +412,63 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
     func renderer(_ renderer: SCNSceneRenderer, didUpdate node: SCNNode, for anchor: ARAnchor) {
         if state == .scanning, let planeAnchor = anchor as? ARPlaneAnchor {
             scan?.scannedObject.tryToAlignWithPlanes([planeAnchor])
+        }
+    }
+    
+    func readFile(_ url: URL) {
+        if url.pathExtension == "arobject" {
+            loadReferenceObjectToMerge(from: url)
+        } else if url.pathExtension == "usdz" {
+            modelURL = url
+        }
+    }
+    
+    func loadReferenceObjectToMerge(from url: URL) {
+        do {
+            let receivedReferenceObject = try ARReferenceObject(archiveURL: url)
+            if state == .testing {
+                
+                // Show activity indicator during the merge.
+                ViewController.instance?.showAlert(title: "", message: "Merging received scan into this scan...", buttonTitle: nil)
+                
+                // Try to merge the object which was just scanned with the existing one.
+                self.testRun?.referenceObject?.mergeInBackground(with: receivedReferenceObject, completion: { (mergedObject, error) in
+                    var title: String
+                    var message: String
+                    
+                    if let mergedObject = mergedObject {
+                        mergedObject.name = self.testRun?.referenceObject?.name
+                        self.testRun?.setReferenceObject(mergedObject, screenshot: nil)
+                        
+                        title = "Merge successful"
+                        message = "The received scan has been merged into this scan."
+                    } else {
+                        print("Error: Failed to merge scans. \(error?.localizedDescription ?? "")")
+                        title = "Merge failed"
+                        message = """
+                        Merging the received scan into the current scan failed. Please make sure
+                        that there is sufficient overlap between both scans and that the
+                        lighting environment hasn't changed drastically.
+                        """
+                    }
+                    
+                    // Hide activity indicator and inform the user about the result of the merge.
+                    ViewController.instance?.dismiss(animated: true) {
+                        ViewController.instance?.showAlert(title: title, message: message, buttonTitle: "OK", showCancel: false)
+                    }
+                })
+                
+            } else {
+                // Upon completion of a scan, we will try merging
+                // the scan with this ARReferenceObject.
+                referenceObjectToMerge = receivedReferenceObject
+                displayMessage("Scan \"\(url.lastPathComponent)\" received. " +
+                    "It will be merged with this scan before proceeding to Test mode.", expirationTime: 3.0)
+            }
+        } catch {
+            let title = "File invalid"
+            let message = "Loading the scanned object file failed."
+            self.showAlert(title: title, message: message, buttonTitle: "OK", showCancel: false)
         }
     }
     

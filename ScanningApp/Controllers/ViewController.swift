@@ -20,7 +20,7 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
     @IBOutlet weak var blurView: UIVisualEffectView!
     @IBOutlet weak var nextButton: RoundedButton!
     var backButton: UIBarButtonItem!
-    var addToScanButton: UIBarButtonItem!
+    var mergeScanButton: UIBarButtonItem!
     @IBOutlet weak var instructionView: UIVisualEffectView!
     @IBOutlet weak var instructionLabel: MessageLabel!
     @IBOutlet weak var loadModelButton: RoundedButton!
@@ -165,12 +165,36 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
     
     @IBAction func addScanButtonTapped(_ sender: Any) {
         guard state == .testing else { return }
-        let title = "Add new scan?"
-        let message = "Stop testing this scan and add a second scan?"
-        self.showAlert(title: title, message: message, buttonTitle: "Yes", showCancel: true) { _ in
+
+        let title = "Merge another scan?"
+        let message = "Merging multiple scan results improves detection. You can start a new scan now to merge into this one, or load an already scanned *.arobject file."
+        
+        let alertController = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alertController.addAction(UIAlertAction(title: "Merge New Scan…", style: .default) { _ in
             // Save the previously scanned object as the object to be merged into the next scan.
             self.referenceObjectToMerge = self.testRun?.referenceObject
             self.state = .startARSession
+        })
+        alertController.addAction(UIAlertAction(title: "Merge ARObject File…", style: .default) { _ in
+            // Show a document picker to choose an existing scan
+            self.showFilePickerForLoadingScan()
+        })
+        alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        
+        DispatchQueue.main.async {
+            self.present(alertController, animated: true, completion: nil)
+        }
+    }
+    
+    func showFilePickerForLoadingScan() {
+        let documentPicker = UIDocumentPickerViewController(documentTypes: ["com.apple.arobject"], in: .import)
+        documentPicker.delegate = self
+        
+        documentPicker.modalPresentationStyle = .overCurrentContext
+        documentPicker.popoverPresentationController?.barButtonItem = mergeScanButton
+        
+        DispatchQueue.main.async {
+            self.present(documentPicker, animated: true, completion: nil)
         }
     }
     
@@ -215,8 +239,8 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
     }
     
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-        guard !urls.isEmpty else { return }
-        modelURL = urls[0]
+        guard let url = urls.first else { return }
+        readFile(url)
     }
     
     func showAlert(title: String, message: String, buttonTitle: String? = "OK", showCancel: Bool = false, buttonHandler: ((UIAlertAction) -> Void)? = nil) {
@@ -406,12 +430,9 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
             }
         } else if state == .scanning, let planeAnchor = anchor as? ARPlaneAnchor {
             scan?.scannedObject.tryToAlignWithPlanes([planeAnchor])
-        }
-    }
-    
-    func renderer(_ renderer: SCNSceneRenderer, didUpdate node: SCNNode, for anchor: ARAnchor) {
-        if state == .scanning, let planeAnchor = anchor as? ARPlaneAnchor {
-            scan?.scannedObject.tryToAlignWithPlanes([planeAnchor])
+            
+            // After a plane was found, disable plane detection for performance reasons.
+            sceneView.stopPlaneDetection()
         }
     }
     
@@ -429,7 +450,7 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
             if state == .testing {
                 
                 // Show activity indicator during the merge.
-                ViewController.instance?.showAlert(title: "", message: "Merging received scan into this scan...", buttonTitle: nil)
+                ViewController.instance?.showAlert(title: "", message: "Merging other scan into this scan...", buttonTitle: nil)
                 
                 // Try to merge the object which was just scanned with the existing one.
                 self.testRun?.referenceObject?.mergeInBackground(with: receivedReferenceObject, completion: { (mergedObject, error) in
@@ -441,12 +462,12 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
                         self.testRun?.setReferenceObject(mergedObject, screenshot: nil)
                         
                         title = "Merge successful"
-                        message = "The received scan has been merged into this scan."
+                        message = "The other scan has been merged into this scan."
                     } else {
                         print("Error: Failed to merge scans. \(error?.localizedDescription ?? "")")
                         title = "Merge failed"
                         message = """
-                        Merging the received scan into the current scan failed. Please make sure
+                        Merging the other scan into the current scan failed. Please make sure
                         that there is sufficient overlap between both scans and that the
                         lighting environment hasn't changed drastically.
                         """

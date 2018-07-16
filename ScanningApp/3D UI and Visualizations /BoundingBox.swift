@@ -336,7 +336,7 @@ class BoundingBox: SCNNode {
         // Create a new hit test ray. A line segment defined by its start and end point
         // is used to hit test against bounding box tiles. The ray's length allows for
         // intersections if the user is no more than five meters away from the bounding box.
-        let ray = Ray(from: camera, length: 5.0)
+        let ray = Ray(normalFrom: camera, length: 5.0)
         
         for (_, side) in self.sides {
             for tile in side.tiles where tile.isHighlighted {
@@ -367,7 +367,7 @@ class BoundingBox: SCNNode {
             // Create a new hit test ray. A line segment defined by its start and end point
             // is used to hit test against bounding box tiles. The ray's length allows for
             // intersections if the user is no more than five meters away from the bounding box.
-            let currentRay = Ray(from: camera, length: 5.0)
+            let currentRay = Ray(normalFrom: camera, length: 5.0)
             
             // Only remember the ray if it hit the bounding box,
             // and the hit location is significantly different from all previous hit locations.
@@ -436,7 +436,7 @@ class BoundingBox: SCNNode {
     
     private func tile(hitBy ray: Ray) -> (tile: Tile, hitLocation: float3)? {
         // Perform hit test with given ray
-        let hitResults = self.sceneView.scene.rootNode.hitTestWithSegment(from: ray.origin, to: ray.direction, options: [
+        let hitResults = self.sceneView.scene.rootNode.hitTestWithSegment(from: ray.origin, to: ray.endPoint, options: [
             .ignoreHiddenNodes: false,
             .boundingBoxOnly: true,
             .searchMode: SCNHitTestSearchMode.all])

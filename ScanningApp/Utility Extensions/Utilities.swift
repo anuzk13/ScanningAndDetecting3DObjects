@@ -82,16 +82,17 @@ extension SCNMaterial {
 struct Ray {
     let origin: float3
     let direction: float3
+    let endPoint: float3
     
     init(origin: float3, direction: float3) {
         self.origin = origin
         self.direction = direction
+        self.endPoint = origin + direction
     }
     
-    init(from pointOfView: SCNNode, length: Float) {
+    init(normalFrom pointOfView: SCNNode, length: Float) {
         let cameraNormal = normalize(pointOfView.simdWorldFront) * length
-        self.origin = pointOfView.simdWorldPosition
-        self.direction = cameraNormal
+        self.init(origin: pointOfView.simdWorldPosition, direction: cameraNormal)
     }
 }
 
@@ -119,6 +120,13 @@ extension ARSCNView {
             }
         }
         return nil
+    }
+    
+    func stopPlaneDetection() {
+        if let configuration = session.configuration as? ARObjectScanningConfiguration {
+            configuration.planeDetection = []
+            session.run(configuration)
+        }
     }
 }
 

@@ -111,7 +111,7 @@ extension ViewController {
                 self.setNavigationBarTitle("Test")
                 loadModelButton.isHidden = true
                 flashlightButton.isHidden = false
-                showAddToScanButton()
+                showMergeScanButton()
                 nextButton.isEnabled = true
                 nextButton.setTitle("Share", for: [])
                 
@@ -170,6 +170,8 @@ extension ViewController {
                 self.loadModelButton.isHidden = true
                 self.flashlightButton.isHidden = true
                 self.nextButton.setTitle("Finish", for: [])
+                // Disable plane detection (even if no plane has been found yet at this time) for performance reasons.
+                self.sceneView.stopPlaneDetection()
             case .adjustingOrigin:
                 print("State: Adjusting Origin")
                 self.displayInstruction(Message("Adjust origin using gestures.\n" +

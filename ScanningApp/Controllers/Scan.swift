@@ -114,6 +114,10 @@ class Scan {
     
     private var hasWarnedAboutLowLight = false
     
+    private var isFirstScan: Bool {
+        return ViewController.instance?.referenceObjectToMerge == nil
+    }
+    
     static let minFeatureCount = 100
     
     init(_ sceneView: ARSCNView) {
@@ -323,7 +327,7 @@ class Scan {
         
         if state == .ready || state == .defineBoundingBox || state == .scanning {
             
-            if let lightEstimate = frame.lightEstimate, lightEstimate.ambientIntensity < 500, !hasWarnedAboutLowLight {
+            if let lightEstimate = frame.lightEstimate, lightEstimate.ambientIntensity < 500, !hasWarnedAboutLowLight, isFirstScan {
                 hasWarnedAboutLowLight = true
                 let title = "Too dark for scanning"
                 let message = "Consider moving to an environment with more light."

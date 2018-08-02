@@ -138,9 +138,11 @@ class ScannedObject: SCNNode {
     private func updateOrCreateGhostBoundingBox() {
         // Perform a hit test against the feature point cloud.
         guard let result = sceneView.smartHitTest(ViewController.instance!.screenCenter) else {
-            ghostBoundingBox?.removeFromParentNode()
-            ghostBoundingBox = nil
-            NotificationCenter.default.post(name: ScannedObject.ghostBoundingBoxRemovedNotification, object: nil)
+            if let ghostBoundingBox = ghostBoundingBox {
+                ghostBoundingBox.removeFromParentNode()
+                self.ghostBoundingBox = nil
+                NotificationCenter.default.post(name: ScannedObject.ghostBoundingBoxRemovedNotification, object: nil)
+            }
             return
         }
         
@@ -157,8 +159,7 @@ class ScannedObject: SCNNode {
             boundingBox.extent = float3(newExtent)
             // Change the orientation of the bounding box to always face the user.
             if let currentFrame = sceneView.session.currentFrame {
-                let cameraY = currentFrame.camera.eulerAngles.y
-                rotation = SCNVector4Make(0, 1, 0, cameraY)
+                eulerAngles.y = currentFrame.camera.eulerAngles.y
             }
         } else {
             let boundingBox = BoundingBox(sceneView)

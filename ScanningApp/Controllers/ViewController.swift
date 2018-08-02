@@ -34,8 +34,8 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
     
     internal var scan: Scan?
     
-    private var initialARReferenceObject: ARReferenceObject?
     var referenceObjectToMerge: ARReferenceObject?
+    var referenceObjectToTest: ARReferenceObject?
     
     internal var testRun: TestRun?
     
@@ -167,7 +167,10 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
         guard state == .testing else { return }
 
         let title = "Merge another scan?"
-        let message = "Merging multiple scan results improves detection. You can start a new scan now to merge into this one, or load an already scanned *.arobject file."
+        let message = """
+            Merging multiple scan results improves detection.
+            You can start a new scan now to merge into this one, or load an already scanned *.arobject file.
+            """
         
         let alertController = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alertController.addAction(UIAlertAction(title: "Merge New Scan…", style: .default) { _ in
@@ -245,19 +248,43 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
     
     func showAlert(title: String, message: String, buttonTitle: String? = "OK", showCancel: Bool = false, buttonHandler: ((UIAlertAction) -> Void)? = nil) {
         print(title + "\n" + message)
-        let alertController = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        
+        var actions = [UIAlertAction]()
         if let buttonTitle = buttonTitle {
-            alertController.addAction(UIAlertAction(title: buttonTitle, style: .default, handler: buttonHandler))
+            actions.append(UIAlertAction(title: buttonTitle, style: .default, handler: buttonHandler))
         }
         if showCancel {
-            alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            actions.append(UIAlertAction(title: "Cancel", style: .cancel))
         }
-        DispatchQueue.main.async {
-            self.present(alertController, animated: true, completion: nil)
+        self.showAlert(title: title, message: message, actions: actions)
+    }
+    
+    func showAlert(title: String, message: String, actions: [UIAlertAction]) {
+        let showAlertBlock = {
+            let alertController = UIAlertController(title: title, message: message, preferredStyle: .alert)
+            actions.forEach { alertController.addAction($0) }
+            DispatchQueue.main.async {
+                self.present(alertController, animated: true, completion: nil)
+            }
+        }
+        
+        if presentedViewController != nil {
+            dismiss(animated: true) {
+                showAlertBlock()
+            }
+        } else {
+            showAlertBlock()
         }
     }
     
     func testObjectDetection() {
+        // In case an object for testing has been received, use it right away...
+        if let object = referenceObjectToTest {
+            testObjectDetection(of: object)
+            return
+        }
+        
+        // ...otherwise attempt to create a reference object from the current scan.
         guard let scan = scan, scan.boundingBoxExists else {
             print("Error: Bounding box not yet created.")
             return
@@ -265,18 +292,7 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
         
         scan.createReferenceObject { scannedObject in
             if let object = scannedObject {
-                self.testRun?.setReferenceObject(object, screenshot: scan.screenshot)
-
-                // Delete the scan to make sure that users cannot go back from
-                // testing to scanning, because:
-                // 1. Testing and scanning require running the ARSession with different configurations,
-                //    thus the scanned environment is lost when starting a test.
-                // 2. We encourage users to move the scanned object during testing, which invalidates
-                //    the feature point cloud which was captured during scanning.
-                self.scan = nil
-                self.displayInstruction(Message("""
-                    Test detection of the object from different angles. Consider moving the object to different environments and test there.
-                    """))
+                self.testObjectDetection(of: object)
             } else {
                 let title = "Scan failed"
                 let message = "Saving the scan failed."
@@ -286,6 +302,21 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
                 }
             }
         }
+    }
+    
+    func testObjectDetection(of object: ARReferenceObject) {
+        self.testRun?.setReferenceObject(object, screenshot: scan?.screenshot)
+        
+        // Delete the scan to make sure that users cannot go back from
+        // testing to scanning, because:
+        // 1. Testing and scanning require running the ARSession with different configurations,
+        //    thus the scanned environment is lost when starting a test.
+        // 2. We encourage users to move the scanned object during testing, which invalidates
+        //    the feature point cloud which was captured during scanning.
+        self.scan = nil
+        self.displayInstruction(Message("""
+                    Test detection of the object from different angles. Consider moving the object to different environments and test there.
+                    """))
     }
     
     func createAndShareReferenceObject() {
@@ -444,52 +475,71 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
         }
     }
     
+    fileprivate func mergeIntoCurrentScan(referenceObject: ARReferenceObject, from url: URL) {
+        if self.state == .testing {
+            
+            // Show activity indicator during the merge.
+            ViewController.instance?.showAlert(title: "", message: "Merging other scan into this scan...", buttonTitle: nil)
+            
+            // Try to merge the object which was just scanned with the existing one.
+            self.testRun?.referenceObject?.mergeInBackground(with: referenceObject, completion: { (mergedObject, error) in
+                let alertController = UIAlertController(title: nil, message: nil, preferredStyle: .alert)
+                
+                if let mergedObject = mergedObject {
+                    mergedObject.name = self.testRun?.referenceObject?.name
+                    self.testRun?.setReferenceObject(mergedObject, screenshot: nil)
+                    self.showAlert(title: "Merge successful", message: "The other scan has been merged into this scan.",
+                                   buttonTitle: "OK", showCancel: false)
+                    
+                } else {
+                    print("Error: Failed to merge scans. \(error?.localizedDescription ?? "")")
+                    alertController.title = "Merge failed"
+                    let message = """
+                            Merging the other scan into the current scan failed. Please make sure
+                            that there is sufficient overlap between both scans and that the
+                            lighting environment hasn't changed drastically.
+                            Which scan do you want to use to proceed testing?
+                            """
+                    let currentScan = UIAlertAction(title: "Use Current Scan", style: .default)
+                    let otherScan = UIAlertAction(title: "Use Other Scan", style: .default) { _ in
+                        self.testRun?.setReferenceObject(referenceObject, screenshot: nil)
+                    }
+                    self.showAlert(title: "Merge failed", message: message, actions: [currentScan, otherScan])
+                }
+            })
+            
+        } else {
+            // Upon completion of a scan, we will try merging
+            // the scan with this ARReferenceObject.
+            self.referenceObjectToMerge = referenceObject
+            self.displayMessage("Scan \"\(url.lastPathComponent)\" received. " +
+                "It will be merged with this scan before proceeding to Test mode.", expirationTime: 3.0)
+        }
+    }
+    
     func loadReferenceObjectToMerge(from url: URL) {
         do {
             let receivedReferenceObject = try ARReferenceObject(archiveURL: url)
-            if state == .testing {
-                
-                // Show activity indicator during the merge.
-                ViewController.instance?.showAlert(title: "", message: "Merging other scan into this scan...", buttonTitle: nil)
-                
-                // Try to merge the object which was just scanned with the existing one.
-                self.testRun?.referenceObject?.mergeInBackground(with: receivedReferenceObject, completion: { (mergedObject, error) in
-                    var title: String
-                    var message: String
-                    
-                    if let mergedObject = mergedObject {
-                        mergedObject.name = self.testRun?.referenceObject?.name
-                        self.testRun?.setReferenceObject(mergedObject, screenshot: nil)
-                        
-                        title = "Merge successful"
-                        message = "The other scan has been merged into this scan."
-                    } else {
-                        print("Error: Failed to merge scans. \(error?.localizedDescription ?? "")")
-                        title = "Merge failed"
-                        message = """
-                        Merging the other scan into the current scan failed. Please make sure
-                        that there is sufficient overlap between both scans and that the
-                        lighting environment hasn't changed drastically.
-                        """
-                    }
-                    
-                    // Hide activity indicator and inform the user about the result of the merge.
-                    ViewController.instance?.dismiss(animated: true) {
-                        ViewController.instance?.showAlert(title: title, message: message, buttonTitle: "OK", showCancel: false)
-                    }
-                })
-                
-            } else {
-                // Upon completion of a scan, we will try merging
-                // the scan with this ARReferenceObject.
-                referenceObjectToMerge = receivedReferenceObject
-                displayMessage("Scan \"\(url.lastPathComponent)\" received. " +
-                    "It will be merged with this scan before proceeding to Test mode.", expirationTime: 3.0)
+            
+            // Ask the user if the received object should be merged into the current scan,
+            // or if the received scan should be tested (and the current one discarded).
+            let title = "Scan \"\(url.lastPathComponent)\" received"
+            let message = """
+                Do you want to merge the received scan into the current scan,
+                or test only the received scan, discarding the current scan?
+                """
+            let merge = UIAlertAction(title: "Merge Into This Scan", style: .default) { _ in
+                self.mergeIntoCurrentScan(referenceObject: receivedReferenceObject, from: url)
             }
+            let test = UIAlertAction(title: "Test Received Scan", style: .default) { _ in
+                self.referenceObjectToTest = receivedReferenceObject
+                self.state = .testing
+            }
+            self.showAlert(title: title, message: message, actions: [merge, test])
+            
         } catch {
-            let title = "File invalid"
-            let message = "Loading the scanned object file failed."
-            self.showAlert(title: title, message: message, buttonTitle: "OK", showCancel: false)
+            self.showAlert(title: "File invalid", message: "Loading the scanned object file failed.",
+                           buttonTitle: "OK", showCancel: false)
         }
     }
     

@@ -12,9 +12,13 @@ import SceneKit
 class ScannedPointCloud: SCNNode, PointCloud {
     
     private var pointNode = SCNNode()
+    private var preliminaryPointsNode = SCNNode()
     
     // The latest known set of points inside the reference object.
     private var referenceObjectPoints: [float3] = []
+    
+    // The current frame's set of points inside the reference object.
+    private var currentFramePoints: [float3] = []
     
     // The set of currently rendered points, in world coordinates.
     // Note: We render them in world coordinates instead of local coordinates to
@@ -22,12 +26,18 @@ class ScannedPointCloud: SCNNode, PointCloud {
     //       bounding box is rotated.
     private var renderedPoints: [float3] = []
     
+    // The set of points from the current frame, in world coordinates.
+    // Note: These are preliminary since not all of them might be added
+    //       to the reference object.
+    private var renderedPreliminaryPoints: [float3] = []
+    
     private var boundingBox: BoundingBox?
     
     override init() {
         super.init()
         
         addChildNode(pointNode)
+        addChildNode(preliminaryPointsNode)
         
         NotificationCenter.default.addObserver(self,
                                                selector: #selector(self.scanningStateChanged(_:)),
@@ -64,7 +74,7 @@ class ScannedPointCloud: SCNNode, PointCloud {
         self.boundingBox = boundingBox
     }
     
-    func update(_ pointCloud: ARPointCloud, for boundingBox: BoundingBox) {
+    func update(with pointCloud: ARPointCloud, localFor boundingBox: BoundingBox) {
         // Convert the points to world coordinates because we display them
         // in world coordinates.
         var pointsInWorld: [float3] = []
@@ -75,35 +85,33 @@ class ScannedPointCloud: SCNNode, PointCloud {
         self.referenceObjectPoints = pointsInWorld
     }
     
+    func update(with pointCloud: ARPointCloud) {
+        self.currentFramePoints = pointCloud.points
+    }
+    
     func updateOnEveryFrame() {
         guard !self.isHidden else { return }
         guard !referenceObjectPoints.isEmpty, let boundingBox = boundingBox else {
             self.pointNode.geometry = nil
+            self.preliminaryPointsNode.geometry = nil
             return
         }
         
         renderedPoints = []
-        
-        let min = -boundingBox.extent / 2
-        let max = boundingBox.extent / 2
+        renderedPreliminaryPoints = []
         
         // Abort if the bounding box has no extent yet
-        guard max.x > 0 else { return }
+        guard boundingBox.extent.x > 0 else { return }
         
-        // Check which of the reference object's points are still within the bounding box.
+        // Check which of the reference object's points and current frame's points are within the bounding box.
         // Note: The creation of the latest ARReferenceObject happens at a lower frequency
         //       than rendering and updates of the bounding box, so some of the points
         //       may no longer be inside of the box.
-        for point in referenceObjectPoints {
-            let localPoint = boundingBox.simdConvertPosition(point, from: nil)
-            if (min.x..<max.x).contains(localPoint.x) &&
-                (min.y..<max.y).contains(localPoint.y) &&
-                (min.z..<max.z).contains(localPoint.z) {
-                renderedPoints.append(point)
-            }
-        }
+        renderedPoints = referenceObjectPoints.filter { boundingBox.contains($0) }
+        renderedPreliminaryPoints = currentFramePoints.filter { boundingBox.contains($0) }
         
         self.pointNode.geometry = createVisualization(for: renderedPoints, color: .appYellow, size: 12)
+        self.preliminaryPointsNode.geometry = createVisualization(for: renderedPreliminaryPoints, color: .appLightYellow, size: 12)
     }
     
     var count: Int {

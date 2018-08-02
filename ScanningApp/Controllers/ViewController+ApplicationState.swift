@@ -55,7 +55,7 @@ extension ViewController {
                     newState = .startARSession
                 }
             case .testing:
-                guard let scan = scan, scan.boundingBoxExists else {
+                guard scan?.boundingBoxExists == true || referenceObjectToTest != nil else {
                     print("Error: Scan is not ready to be tested.")
                     return
                 }

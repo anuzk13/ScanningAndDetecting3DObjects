@@ -13,6 +13,7 @@ class Scan {
     
     static let stateChangedNotification = Notification.Name("ScanningStateChanged")
     static let stateUserInfoKey = "ScanState"
+    static let objectCreationInterval: CFTimeInterval = 1.0
     
     enum State {
         case ready
@@ -337,20 +338,29 @@ class Scan {
             // Try a preliminary creation of the reference object based off the current
             // bounding box & update the point cloud visualization based on that.
             if let boundingBox = scannedObject.eitherBoundingBox {
-                // Note: Creating the reference object is asynchronous and likely
-                //       takes some time to complete. Avoid calling it again while we
-                //       still wait for the previous call to complete.
-                if !isBusyCreatingReferenceObject {
+                // Note: Create a new preliminary reference object in regular intervals.
+                //       Creating the reference object is asynchronous and likely
+                //       takes some time to complete. Avoid calling it again before
+                //       enough time has passed and while we still wait for the
+                //       previous call to complete.
+                let now = CACurrentMediaTime()
+                if now - timeOfLastReferenceObjectCreation > Scan.objectCreationInterval, !isBusyCreatingReferenceObject {
+                    timeOfLastReferenceObjectCreation = now
                     isBusyCreatingReferenceObject = true
                     sceneView.session.createReferenceObject(transform: boundingBox.simdWorldTransform,
                                                             center: float3(),
                                                             extent: boundingBox.extent) { object, error in
                         if let referenceObject = object {
                             // Pass the feature points to the point cloud visualization.
-                            self.pointCloud.update(referenceObject.rawFeaturePoints, for: boundingBox)
+                            self.pointCloud.update(with: referenceObject.rawFeaturePoints, localFor: boundingBox)
                         }
                         self.isBusyCreatingReferenceObject = false
                     }
+                }
+                
+                // Update the point cloud with the current frame's points as well
+                if let currentPoints = frame.rawFeaturePoints {
+                    pointCloud.update(with: currentPoints)
                 }
             }
         }
@@ -364,6 +374,8 @@ class Scan {
         scannedObject.updateOnEveryFrame()
         pointCloud.updateOnEveryFrame()
     }
+    
+    var timeOfLastReferenceObjectCreation = CACurrentMediaTime()
     
     var qualityIsLow: Bool {
         return pointCloud.count < Scan.minFeatureCount
@@ -410,8 +422,7 @@ class Scan {
             completionHandler: { object, error in
                 if let referenceObject = object {
                     // Adjust the object's origin with the user-provided transform.
-                    self.scannedReferenceObject =
-                        referenceObject.applyingTransform(origin.simdTransform)
+                    self.scannedReferenceObject = referenceObject.applyingTransform(origin.simdTransform)
                     self.scannedReferenceObject!.name = self.scannedObject.scanName
                     
                     if let referenceObjectToMerge = ViewController.instance?.referenceObjectToMerge {
@@ -422,32 +433,31 @@ class Scan {
                         
                         // Try to merge the object which was just scanned with the existing one.
                         self.scannedReferenceObject?.mergeInBackground(with: referenceObjectToMerge, completion: { (mergedObject, error) in
-                            var title: String
-                            var message: String
-                            
+
                             if let mergedObject = mergedObject {
                                 mergedObject.name = self.scannedReferenceObject?.name
                                 self.scannedReferenceObject = mergedObject
+                                ViewController.instance?.showAlert(title: "Merge successful",
+                                                                   message: "The previous scan has been merged into this scan.", buttonTitle: "OK")
+                                creationFinished(self.scannedReferenceObject)
 
-                                title = "Merge successful"
-                                message = "The previous scan has been merged into this scan."
-                                
                             } else {
                                 print("Error: Failed to merge scans. \(error?.localizedDescription ?? "")")
-                                title = "Merge failed"
-                                message = """
+                                let message = """
                                         Merging the previous scan into this scan failed. Please make sure that
                                         there is sufficient overlap between both scans and that the lighting
                                         environment hasn't changed drastically.
+                                        Which scan do you want to use for testing?
                                         """
+                                let thisScan = UIAlertAction(title: "Use This Scan", style: .default) { _ in
+                                    creationFinished(self.scannedReferenceObject)
+                                }
+                                let previousScan = UIAlertAction(title: "Use Previous Scan", style: .default) { _ in
+                                    self.scannedReferenceObject = referenceObjectToMerge
+                                    creationFinished(self.scannedReferenceObject)
+                                }
+                                ViewController.instance?.showAlert(title: "Merge failed", message: message, actions: [thisScan, previousScan])
                             }
-                            
-                            // Hide activity indicator and inform the user about the result of the merge.
-                            ViewController.instance?.dismiss(animated: true) {
-                                ViewController.instance?.showAlert(title: title, message: message, buttonTitle: "OK", showCancel: false)
-                            }
-
-                            creationFinished(self.scannedReferenceObject)
                         })
                     } else {
                         creationFinished(self.scannedReferenceObject)

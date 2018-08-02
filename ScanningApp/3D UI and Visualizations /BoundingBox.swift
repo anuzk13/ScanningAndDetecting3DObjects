@@ -95,7 +95,7 @@ class BoundingBox: SCNNode {
     }
     
     func fitOverPointCloud(_ pointCloud: ARPointCloud, focusPoint: float3?) {
-        var filteredPoints: [vector_float3] = []
+        var filteredPoints: [float3] = []
         
         for point in pointCloud.points {
             if let focus = focusPoint {
@@ -478,8 +478,8 @@ class BoundingBox: SCNNode {
     func tryToAlignWithPlanes(_ anchors: [ARAnchor]) {
         guard !hasBeenAdjustedByUser, ViewController.instance?.scan?.state == .defineBoundingBox else { return }
         
-        let bottomCenter = SCNVector3(x: position.x, y: position.y - extent.y / 2, z: position.z)
-        
+        let bottomCenter = float3(simdPosition.x, simdPosition.y - extent.y / 2, simdPosition.z)
+
         var distanceToNearestPlane = Float.greatestFiniteMagnitude
         var offsetToNearestPlaneOnY: Float = 0
         var planeFound = false
@@ -494,7 +494,7 @@ class BoundingBox: SCNNode {
             }
             
             // Get the position of the bottom center of this bounding box in the plane's coordinate system.
-            let bottomCenterInPlaneCoords = planeNode.convertPosition(bottomCenter, from: parent)
+            let bottomCenterInPlaneCoords = planeNode.simdConvertPosition(bottomCenter, from: parent)
             
             // Add 10% tolerance to the corners of the plane.
             let tolerance: Float = 0.1

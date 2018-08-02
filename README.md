@@ -30,6 +30,8 @@ The programming steps to scan and define a reference object that ARKit can use f
 
 ![Screenshots of the five steps in using the sample app to scan a real-world object: prepare, define bounding box, scan, adjust origin, then test and export.](Documentation/ScannerAppUIFlow.png)
 
+- Note: For easy object scanning, use a recent, high-performance iOS device. Scanned objects can be detected on any ARKit-supported device, but the process of creating a high-quality scan is faster and smoother on a high-performance device.
+
 1. **Prepare to scan.** When first run, the app displays a box that roughly estimates the size of whatever real-world objects appear centered in the camera view. Position the object you want to scan on a surface free of other objects (like an empty tabletop). Then move your device so that the object appears centered in the box, and tap the Next button.
 2. **Define bounding box.** Before scanning, you need to tell the app what region of the world contains the object you want to scan. Drag to move the box around in 3D, or press and hold on a side of the box and then drag to resize it. (Or, if you leave the box untouched, you can move around the object and the app will attempt to automatically fit a box around it.) Make sure the bounding box contains only features of the object you want to scan (not those from the environment it's in), then tap the Scan button.
 3. **Scan the object.** Move around to look at the object from different angles. The app highlights parts of the bounding box to indicate when you've scanned enough to recognize the object from the corresponding direction. Be sure to scan on all sides from which you want users of your app to be able to recognize the object. The app automatically proceeds to the next step when a scan is complete, or you can tap the Stop button to proceed manually.
@@ -77,7 +79,6 @@ For best results with object scanning and detection, follow these tips:
 - Object scanning and detection is optimized for objects small enough to fit on a tabletop.
 - An object to be detected must have the same shape as the scanned reference object. Rigid objects work better for detection than soft bodies or items that bend, twist, fold, or otherwise change shape.
 - Detection works best when the lighting conditions for the real-world object to be detected are similar to those in which the original object was scanned. Consistent indoor lighting works best.
-- High-quality object scanning requires peak device performance. Reference objects scanned with a recent, high-performance iOS device work well for detection on all ARKit-supported devices.
 
 [31]:https://developer.apple.com/documentation/arkit/arworldtrackingconfiguration
 [32]:https://developer.apple.com/documentation/arkit/arsession
@@ -112,8 +113,7 @@ sceneView.session.createReferenceObject(
     completionHandler: { object, error in
         if let referenceObject = object {
             // Adjust the object's origin with the user-provided transform.
-            self.scannedReferenceObject =
-                referenceObject.applyingTransform(origin.simdTransform)
+            self.scannedReferenceObject = referenceObject.applyingTransform(origin.simdTransform)
             self.scannedReferenceObject!.name = self.scannedObject.scanName
             
             if let referenceObjectToMerge = ViewController.instance?.referenceObjectToMerge {
@@ -124,32 +124,31 @@ sceneView.session.createReferenceObject(
                 
                 // Try to merge the object which was just scanned with the existing one.
                 self.scannedReferenceObject?.mergeInBackground(with: referenceObjectToMerge, completion: { (mergedObject, error) in
-                    var title: String
-                    var message: String
-                    
+
                     if let mergedObject = mergedObject {
                         mergedObject.name = self.scannedReferenceObject?.name
                         self.scannedReferenceObject = mergedObject
+                        ViewController.instance?.showAlert(title: "Merge successful",
+                                                           message: "The previous scan has been merged into this scan.", buttonTitle: "OK")
+                        creationFinished(self.scannedReferenceObject)
 
-                        title = "Merge successful"
-                        message = "The previous scan has been merged into this scan."
-                        
                     } else {
                         print("Error: Failed to merge scans. \(error?.localizedDescription ?? "")")
-                        title = "Merge failed"
-                        message = """
+                        let message = """
                                 Merging the previous scan into this scan failed. Please make sure that
                                 there is sufficient overlap between both scans and that the lighting
                                 environment hasn't changed drastically.
+                                Which scan do you want to use for testing?
                                 """
+                        let thisScan = UIAlertAction(title: "Use This Scan", style: .default) { _ in
+                            creationFinished(self.scannedReferenceObject)
+                        }
+                        let previousScan = UIAlertAction(title: "Use Previous Scan", style: .default) { _ in
+                            self.scannedReferenceObject = referenceObjectToMerge
+                            creationFinished(self.scannedReferenceObject)
+                        }
+                        ViewController.instance?.showAlert(title: "Merge failed", message: message, actions: [thisScan, previousScan])
                     }
-                    
-                    // Hide activity indicator and inform the user about the result of the merge.
-                    ViewController.instance?.dismiss(animated: true) {
-                        ViewController.instance?.showAlert(title: title, message: message, buttonTitle: "OK", showCancel: false)
-                    }
-
-                    creationFinished(self.scannedReferenceObject)
                 })
             } else {
                 creationFinished(self.scannedReferenceObject)

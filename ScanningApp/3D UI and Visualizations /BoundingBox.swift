@@ -436,7 +436,7 @@ class BoundingBox: SCNNode {
     
     private func tile(hitBy ray: Ray) -> (tile: Tile, hitLocation: float3)? {
         // Perform hit test with given ray
-        let hitResults = self.sceneView.scene.rootNode.hitTestWithSegment(from: ray.origin, to: ray.endPoint, options: [
+        let hitResults = self.sceneView.scene.rootNode.hitTestWithSegment(from: ray.origin, to: ray.origin + ray.direction, options: [
             .ignoreHiddenNodes: false,
             .boundingBoxOnly: true,
             .searchMode: SCNHitTestSearchMode.all])

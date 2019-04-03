@@ -19,9 +19,16 @@ This sample code project provides multiple ways to make use of object detection:
 [01]:https://developer.apple.com/documentation/arkit/arreferenceobject
 [02]:https://developer.apple.com/documentation/arkit/arworldtrackingconfiguration/2968177-detectionobjects
 
-## Getting Started
 
-Requires Xcode 10.0, iOS 12.0 and an iOS device with an A9 or later processor. ARKit is not supported in iOS Simulator.
+- Note: ARKit requires an iOS device with A9 processor or later. ARKit is not supported in iOS Simulator.
+
+## Configure Your Physical Environment to Enhance Object Scanning
+
+Set up your physical environment according to the following guidelines. Use these recommendations as a target configuration even if it's unreachable in the specific circumstances of your scanning environment. You can scan objects outside of these specifications if necessary, but they provide ARKit with the conditions most conducive to object scanning. 
+
+- Light the object with an illuminance of 250 to 400 lux, and ensure that it's well-lit from all sides.
+- Provide a light temperature of around ~6500 Kelvin (D65)––similar with daylight. Avoid warm or any other colored light sources.
+- Set the object in front of a matte, middle gray background. 
 
 ## Scan Real-World Objects with an iOS App
 
@@ -30,13 +37,12 @@ The programming steps to scan and define a reference object that ARKit can use f
 
 ![Screenshots of the five steps in using the sample app to scan a real-world object: prepare, define bounding box, scan, adjust origin, then test and export.](Documentation/ScannerAppUIFlow.png)
 
-- Note: For easy object scanning, use a recent, high-performance iOS device. Scanned objects can be detected on any ARKit-supported device, but the process of creating a high-quality scan is faster and smoother on a high-performance device.
-
-1. **Prepare to scan.** When first run, the app displays a box that roughly estimates the size of whatever real-world objects appear centered in the camera view. Position the object you want to scan on a surface free of other objects (like an empty tabletop). Then move your device so that the object appears centered in the box, and tap the Next button.
-2. **Define bounding box.** Before scanning, you need to tell the app what region of the world contains the object you want to scan. Drag to move the box around in 3D, or press and hold on a side of the box and then drag to resize it. (Or, if you leave the box untouched, you can move around the object and the app will attempt to automatically fit a box around it.) Make sure the bounding box contains only features of the object you want to scan (not those from the environment it's in), then tap the Scan button.
-3. **Scan the object.** Move around to look at the object from different angles. The app highlights parts of the bounding box to indicate when you've scanned enough to recognize the object from the corresponding direction. Be sure to scan on all sides from which you want users of your app to be able to recognize the object. The app automatically proceeds to the next step when a scan is complete, or you can tap the Stop button to proceed manually.
-4. **Adjust origin.** The app displays x, y, and z coordinate axis lines showing the object's anchor point, or *origin*. Drag the circles to move the origin relative to the object. In this step you can also use the Add (+) button to load a 3D model in USDZ format. The app displays the model as it would appear in AR upon detecting the real-world object, and uses the model's size to adjust the scale of the reference object. Tap the Test button when done.
-5. **Test and export.** The app has now created an [`ARReferenceObject`][01] and has reconfigured its session to detect it. Look at the real-world object from different angles, in various environments and lighting conditions, to verify that ARKit reliably recognizes its position and orientation. Tap the Export button to open a share sheet for saving the finished `.arobject` file. For example, you can easily send it to your development Mac using AirDrop, or send it to the Files app to save it to iCloud Drive.
+1. **Choose an iOS Device.** For easy object scanning, use a recent, high-performance iOS device. Scanned objects can be detected on any ARKit-supported device, but the process of creating a high-quality scan is faster and smoother on a high-performance device.
+2. **Position the object.** When first run, the app displays a box that roughly estimates the size of whatever real-world objects appear centered in the camera view. Position the object you want to scan on a surface free of other objects (like an empty tabletop). Then move your device so that the object appears centered in the box, and tap the Next button.
+3. **Define bounding box.** Before scanning, you need to tell the app what region of the world contains the object you want to scan. Drag to move the box around in 3D, or press and hold on a side of the box and then drag to resize it. (Or, if you leave the box untouched, you can move around the object and the app will attempt to automatically fit a box around it.) Make sure the bounding box contains only features of the object you want to scan (not those from the environment it's in), then tap the Scan button.
+4. **Scan the object.** Move around to look at the object from different angles. For best results, move slowly and avoid abrupt motions. The app highlights parts of the bounding box to indicate when you've scanned enough to recognize the object from the corresponding direction. Be sure to scan on all sides from which you want users of your app to be able to recognize the object. The app automatically proceeds to the next step when a scan is complete, or you can tap the Stop button to proceed manually.
+5. **Adjust origin.** The app displays x, y, and z coordinate axis lines showing the object's anchor point, or *origin*. Drag the circles to move the origin relative to the object. In this step you can also use the Add (+) button to load a 3D model in USDZ format. The app displays the model as it would appear in AR upon detecting the real-world object, and uses the model's size to adjust the scale of the reference object. Tap the Test button when done.
+6. **Test and export.** The app has now created an [`ARReferenceObject`][01] and has reconfigured its session to detect it. Look at the real-world object from different angles, in various environments and lighting conditions, to verify that ARKit reliably recognizes its position and orientation. Tap the Export button to open a share sheet for saving the finished `.arobject` file. For example, you can easily send it to your development Mac using AirDrop, or send it to the Files app to save it to iCloud Drive.
 
 - Note: An [`ARReferenceObject`][01] contains only the spatial feature information needed for ARKit to recognize the real-world object, and is not a displayable 3D reconstruction of that object.
 
@@ -83,7 +89,7 @@ For best results with object scanning and detection, follow these tips:
 [31]:https://developer.apple.com/documentation/arkit/arworldtrackingconfiguration
 [32]:https://developer.apple.com/documentation/arkit/arsession
 [33]:https://developer.apple.com/documentation/arkit/arobjectanchor
-[34]:https://developer.apple.com/documentation/arkit/arsessionDelegate
+[34]:https://developer.apple.com/documentation/arkit/arsessiondelegate
 [35]:https://developer.apple.com/documentation/arkit/arscnviewdelegate
 [36]:https://developer.apple.com/documentation/arkit/arskviewdelegate
 [37]:https://developer.apple.com/documentation/arkit/arscnviewdelegate/2865794-renderer
@@ -126,7 +132,6 @@ sceneView.session.createReferenceObject(
                 self.scannedReferenceObject?.mergeInBackground(with: referenceObjectToMerge, completion: { (mergedObject, error) in
 
                     if let mergedObject = mergedObject {
-                        mergedObject.name = self.scannedReferenceObject?.name
                         self.scannedReferenceObject = mergedObject
                         ViewController.instance?.showAlert(title: "Merge successful",
                                                            message: "The previous scan has been merged into this scan.", buttonTitle: "OK")

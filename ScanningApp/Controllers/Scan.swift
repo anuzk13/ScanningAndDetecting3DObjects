@@ -435,7 +435,6 @@ class Scan {
                         self.scannedReferenceObject?.mergeInBackground(with: referenceObjectToMerge, completion: { (mergedObject, error) in
 
                             if let mergedObject = mergedObject {
-                                mergedObject.name = self.scannedReferenceObject?.name
                                 self.scannedReferenceObject = mergedObject
                                 ViewController.instance?.showAlert(title: "Merge successful",
                                                                    message: "The previous scan has been merged into this scan.", buttonTitle: "OK")

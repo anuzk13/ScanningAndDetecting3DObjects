@@ -281,6 +281,7 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
         // In case an object for testing has been received, use it right away...
         if let object = referenceObjectToTest {
             testObjectDetection(of: object)
+            referenceObjectToTest = nil
             return
         }
         
@@ -486,7 +487,6 @@ class ViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate, UI
                 let alertController = UIAlertController(title: nil, message: nil, preferredStyle: .alert)
                 
                 if let mergedObject = mergedObject {
-                    mergedObject.name = self.testRun?.referenceObject?.name
                     self.testRun?.setReferenceObject(mergedObject, screenshot: nil)
                     self.showAlert(title: "Merge successful", message: "The other scan has been merged into this scan.",
                                    buttonTitle: "OK", showCancel: false)

@@ -83,12 +83,10 @@ extension SCNMaterial {
 struct Ray {
     let origin: float3
     let direction: float3
-    let endPoint: float3
     
     init(origin: float3, direction: float3) {
         self.origin = origin
         self.direction = direction
-        self.endPoint = origin + direction
     }
     
     init(normalFrom pointOfView: SCNNode, length: Float) {

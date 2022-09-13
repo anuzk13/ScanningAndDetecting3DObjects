@@ -46,7 +46,7 @@ class ObjectOrigin: SCNNode {
         return customModel != nil
     }
     
-    init(extent: float3, _ sceneView: ARSCNView) {
+    init(extent: SIMD3<Float>, _ sceneView: ARSCNView) {
         self.sceneView = sceneView
         super.init()
         
@@ -75,7 +75,7 @@ class ObjectOrigin: SCNNode {
         isHidden = true
     }
     
-    func set3DModel(_ url: URL?, extentForScaling: float3?=nil) {
+    func set3DModel(_ url: URL?, extentForScaling: SIMD3<Float>?=nil) {
         customModel?.removeFromParentNode()
         customModel = nil
         
@@ -103,17 +103,17 @@ class ObjectOrigin: SCNNode {
         self.adjustToExtent(boundingBox.extent)
     }
     
-    func adjustToExtent(_ extent: float3?) {
+    func adjustToExtent(_ extent: SIMD3<Float>?) {
         guard let extent = extent else {
-            self.simdScale = float3(1.0)
-            xAxis.simdScale = float3(1.0)
-            yAxis.simdScale = float3(1.0)
-            zAxis.simdScale = float3(1.0)
+            self.simdScale = [1.0, 1.0, 1.0]
+            xAxis.simdScale = [1.0, 1.0, 1.0]
+            yAxis.simdScale = [1.0, 1.0, 1.0]
+            zAxis.simdScale = [1.0, 1.0, 1.0]
             return
         }
         
         // By default the origin's scale is 1x.
-        self.simdScale = float3(1.0)
+        self.simdScale = [1.0, 1.0, 1.0]
         
         // Compute a good scale for the axes based on the extent of the bouning box,
         // but stay within a reasonable range.
@@ -121,9 +121,9 @@ class ObjectOrigin: SCNNode {
         axesScale = max(min(axesScale, maxAxisSize), minAxisSize)
         
         // Adjust the scale of the axes (not the origin itself!)
-        xAxis.simdScale = float3(axesScale)
-        yAxis.simdScale = float3(axesScale)
-        zAxis.simdScale = float3(axesScale)
+        xAxis.simdScale = [1.0, 1.0, 1.0] * axesScale
+        yAxis.simdScale = [1.0, 1.0, 1.0] * axesScale
+        zAxis.simdScale = [1.0, 1.0, 1.0] * axesScale
         
         if let model = customModel {
             // Scale the origin such that the custom 3D model fits into the given extent.
@@ -131,7 +131,7 @@ class ObjectOrigin: SCNNode {
             let originScale = min(extent.x, extent.y, extent.z) / modelExtent
             
             // Scale the origin itself, so that the scale will be preserved in the *.arobject file.
-            self.simdScale = float3(originScale)
+            self.simdScale = [1.0, 1.0, 1.0] * originScale
             
             // Correct the scale of the axes to be the same size as before
             xAxis.simdScale *= (1 / originScale)
@@ -145,7 +145,7 @@ class ObjectOrigin: SCNNode {
         // of the origin. This ensures that the scale at which the 3D model is displayed
         // will be preserved in the *.arobject file.
         if isDisplayingCustom3DModel {
-            self.simdScale *= float3(scale)
+            self.simdScale *= SIMD3<Float>(repeating: scale)
             
             // Correct the scale of the axes to be displayed at the same size as before.
             xAxis.simdScale *= (1 / scale)
@@ -167,16 +167,16 @@ class ObjectOrigin: SCNNode {
                 hitAxis.isHighlighted = true
                 
                 let worldAxis = hitAxis.simdConvertVector(hitAxis.axis.normal, to: nil)
-                let worldPosition = hitAxis.simdConvertVector(float3(0), to: nil)
+                let worldPosition = hitAxis.simdConvertVector([0, 0, 0], to: nil)
                 let hitAxisNormalInWorld = normalize(worldAxis - worldPosition)
 
                 let dragRay = Ray(origin: self.simdWorldPosition, direction: hitAxisNormalInWorld)
                 let transform = dragPlaneTransform(for: dragRay, cameraPos: camera.simdWorldPosition)
                 
-                var offset = float3()
+                var offset = SIMD3<Float>()
                 if let hitPos = sceneView.unprojectPointLocal(screenPos, ontoPlane: transform) {
                     // Project the result onto the plane's X axis & transform into world coordinates.
-                    let posOnPlaneXAxis = float4(hitPos.x, 0, 0, 1)
+                    let posOnPlaneXAxis = SIMD4<Float>(hitPos.x, 0, 0, 1)
                     let worldPosOnPlaneXAxis = transform * posOnPlaneXAxis
 
                     offset = self.simdWorldPosition - worldPosOnPlaneXAxis.xyz
@@ -194,7 +194,7 @@ class ObjectOrigin: SCNNode {
         
         if let hitPos = sceneView.unprojectPointLocal(screenPos, ontoPlane: drag.planeTransform) {
             // Project the result onto the plane's X axis & transform into world coordinates.
-            let posOnPlaneXAxis = float4(hitPos.x, 0, 0, 1)
+            let posOnPlaneXAxis = SIMD4<Float>(hitPos.x, 0, 0, 1)
             let worldPosOnPlaneXAxis = drag.planeTransform * posOnPlaneXAxis
 
             self.simdWorldPosition = worldPosOnPlaneXAxis.xyz + drag.offset
@@ -222,7 +222,7 @@ class ObjectOrigin: SCNNode {
     func startPlaneDrag(screenPos: CGPoint) {
         // Reposition the origin in the XZ-plane.
         let dragPlane = self.simdWorldTransform
-        var offset = float3(0)
+        var offset = SIMD3<Float>(repeating: 0)
         if let hitPos = sceneView.unprojectPoint(screenPos, ontoPlane: dragPlane) {
             offset = self.simdWorldPosition - hitPos
         }
@@ -281,7 +281,7 @@ class ObjectOrigin: SCNNode {
     var isOutsideBoundingBox: Bool {
         guard let boundingBox = self.parent as? BoundingBox else { return true }
         
-        let threshold = float3(0.002)
+        let threshold = SIMD3<Float>(repeating: 0.002)
         let extent = boundingBox.extent + threshold
         
         let pos = simdPosition

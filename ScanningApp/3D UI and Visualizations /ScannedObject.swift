@@ -22,7 +22,7 @@ class ScannedObject: SCNNode {
     
     private var sceneView: ARSCNView
     
-    override var simdPosition: float3 {
+    override var simdPosition: SIMD3<Float> {
         didSet {
             NotificationCenter.default.post(name: ScannedObject.positionChangedNotification,
                                             object: self)
@@ -119,7 +119,7 @@ class ScannedObject: SCNNode {
         
         // Set the initial extent of the bounding box based on the distance to the camera.
         let newExtent = Float(result.distance / 3)
-        boundingBox.extent = float3(newExtent)
+        boundingBox.extent = [1.0, 1.0, 1.0] * newExtent
         
         // Set the position of scanned object to a point on the ray which is offset
         // from the hit test result by half of the bounding boxes' extent.
@@ -156,7 +156,7 @@ class ScannedObject: SCNNode {
         self.simdWorldPosition = result.worldTransform.position + boundingBoxOffset
         
         if let boundingBox = ghostBoundingBox {
-            boundingBox.extent = float3(newExtent)
+            boundingBox.extent = [1.0, 1.0, 1.0] * newExtent
             // Change the orientation of the bounding box to always face the user.
             if let currentFrame = sceneView.session.currentFrame {
                 eulerAngles.y = currentFrame.camera.eulerAngles.y
@@ -165,7 +165,7 @@ class ScannedObject: SCNNode {
             let boundingBox = BoundingBox(sceneView)
             boundingBox.opacity = 0.25
             self.addChildNode(boundingBox)
-            boundingBox.extent = float3(newExtent)
+            boundingBox.extent = [1.0, 1.0, 1.0] * newExtent
             ghostBoundingBox = boundingBox
             
             NotificationCenter.default.post(name: ScannedObject.ghostBoundingBoxCreatedNotification, object: nil)
@@ -179,7 +179,7 @@ class ScannedObject: SCNNode {
         origin.simdPosition.y = -boundingBox.extent.y / 2
     }
     
-    func updatePosition(_ worldPos: float3) {
+    func updatePosition(_ worldPos: SIMD3<Float>) {
         let offset = worldPos - self.simdWorldPosition
         self.simdWorldPosition = worldPos
         
@@ -194,7 +194,7 @@ class ScannedObject: SCNNode {
         if let boundingBox = boundingBox {
             boundingBox.updateOnEveryFrame()
             
-            if boundingBox.simdPosition != float3(0) {
+            if boundingBox.simdPosition != [0, 0, 0] {
                 // Make sure the position of the ScannedObject and its nested
                 // BoundingBox is always identical.
                 updatePosition(boundingBox.simdWorldPosition)
@@ -209,7 +209,7 @@ class ScannedObject: SCNNode {
         
         let oldYExtent = boundingBox.extent.y
         
-        boundingBox.extent *= float3(Float(scale))
+        boundingBox.extent *= SIMD3<Float>(repeating: Float(scale))
         boundingBox.hasBeenAdjustedByUser = true
         
         // Correct y position so that the floor of the box remains at the same position.

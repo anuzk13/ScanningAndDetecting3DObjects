@@ -1,4 +1,4 @@
-# Scanning and Detecting 3D Objects
+# Scanning and detecting 3D objects
 
 Record spatial features of real-world objects, then use the results to find those objects in the user's environment and trigger AR content.
 
@@ -22,15 +22,15 @@ This sample code project provides multiple ways to make use of object detection:
 
 - Note: ARKit requires an iOS device with A9 processor or later. ARKit is not supported in iOS Simulator.
 
-## Configure Your Physical Environment to Enhance Object Scanning
+## Configure your physical environment to enhance object scanning
 
 Set up your physical environment according to the following guidelines. Use these recommendations as a target configuration even if it's unreachable in the specific circumstances of your scanning environment. You can scan objects outside of these specifications if necessary, but they provide ARKit with the conditions most conducive to object scanning. 
 
 - Light the object with an illuminance of 250 to 400 lux, and ensure that it's well-lit from all sides.
-- Provide a light temperature of around ~6500 Kelvin (D65)––similar with daylight. Avoid warm or any other colored light sources.
+- Provide a light temperature of around ~6500 Kelvin (D65)––similar with daylight. Avoid warm or any other tinted light sources.
 - Set the object in front of a matte, middle gray background. 
 
-## Scan Real-World Objects with an iOS App
+## Scan real-world objects with an iOS app
 
 
 The programming steps to scan and define a reference object that ARKit can use for detection are simple. (See "Create a Reference Object in an AR Session" below.) However, the fidelity of the reference object you create, and thus your success at detecting that reference object in your own apps, depends on your physical interactions with the object when scanning. Build and run this app on your iOS device to walk through a series of steps for getting high-quality scan data, resulting in reference object files that you can use for detection in your own apps.
@@ -46,7 +46,7 @@ The programming steps to scan and define a reference object that ARKit can use f
 
 - Note: An [`ARReferenceObject`][01] contains only the spatial feature information needed for ARKit to recognize the real-world object, and is not a displayable 3D reconstruction of that object.
 
-## Detect Reference Objects in an AR Experience
+## Detect reference objects in an AR experience
 
 You can use an Xcode asset catalog to bundle reference objects in an app for use in detection:
 
@@ -94,7 +94,7 @@ For best results with object scanning and detection, follow these tips:
 [36]:https://developer.apple.com/documentation/arkit/arskviewdelegate
 [37]:https://developer.apple.com/documentation/arkit/arscnviewdelegate/2865794-renderer
 
-## Create a Reference Object in an AR Session
+## Create a reference object in an AR session
 
 This sample app provides one way to create reference objects. You can also scan reference objects in your own app—for example, to build asset management tools for defining AR content that goes into other apps you create.
 
@@ -115,7 +115,7 @@ After scanning, call [`createReferenceObject(transform:center:extent:completionH
 // Extract the reference object based on the position & orientation of the bounding box.
 sceneView.session.createReferenceObject(
     transform: boundingBox.simdWorldTransform,
-    center: float3(), extent: boundingBox.extent,
+    center: SIMD3<Float>(), extent: boundingBox.extent,
     completionHandler: { object, error in
         if let referenceObject = object {
             // Adjust the object's origin with the user-provided transform.
@@ -162,7 +162,7 @@ sceneView.session.createReferenceObject(
             print("Error: Failed to create reference object. \(error!.localizedDescription)")
             creationFinished(nil)
         }
-})
+    })
 ```
 [View in Source](x-source-tag://ExtractReferenceObject)
 
